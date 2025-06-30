@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Vite build output (optional)
+frontend/dist/
+
+# VSCode settings (optional)
+.vscode/
