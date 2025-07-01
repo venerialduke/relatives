@@ -74,19 +74,37 @@ function App() {
 			});});
 	};
 
-	const collectItem = (item) => {
-		fetch('/api/collect_item', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ item })
-		})
-			.then(res => res.json())
-			.then(data => {
-			setUnit({
-				...data,
-				inventory_summary: summarizeInventory(data.inventory)
-			});});
-	};
+  const collectItem = (item) => {
+    fetch('/api/collect_item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item })
+    })
+      .then(res => res.json())
+      .then(data => {
+        setUnit({
+          ...data,
+          inventory_summary: summarizeInventory(data.inventory)
+        });
+
+        // Refresh the system and selected space
+        fetch('/api/system')
+          .then(res => res.json())
+          .then(newSystem => {
+            setSystem(newSystem);
+
+            // Find updated selected space from new system
+            const updatedSpace = newSystem.bodies
+              .flatMap(body => body.spaces)
+              .find(space => space.id === selectedSpace.id);
+            
+            if (updatedSpace) {
+              setSelectedSpace(updatedSpace);
+            }
+          });
+      });
+  };
+
 
 	const buildBuilding = (building) => {
 		fetch('/api/build_building', {
@@ -222,19 +240,24 @@ function App() {
                 return (
                   <li key={name}>
                     {name}{' '}
-                    {canBuild(name, reqs) ? (
+                    {canBuild(name, reqs) && !selectedSpace.building ? (
                       <button onClick={() => buildBuilding(name)}>Build</button>
                     ) : (
                       <span style={{ color: 'gray' }}>
-                        (
-                        {Object.entries(reqs).map(([res, count]) => {
-                          const have = inv.filter(i => i === res).length;
-                          const need = count - have;
-                          return `${res} x${count}${need > 0 ? ` – need ${need}` : ''}`;
-                        }).join(', ')}
-                        )
+                        {selectedSpace.building ? 'Building already exists' : (
+                          <>
+                            (
+                            {Object.entries(reqs).map(([res, count]) => {
+                              const have = inv.filter(i => i === res).length;
+                              const need = count - have;
+                              return `${res} x${count}${need > 0 ? ` – need ${need}` : ''}`;
+                            }).join(', ')}
+                            )
+                          </>
+                        )}
                       </span>
                     )}
+
                   </li>
                 );
               })}
