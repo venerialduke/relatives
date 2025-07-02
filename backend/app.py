@@ -4,6 +4,11 @@ import random
 
 app = Flask(__name__)
 CORS(app)
+# Axial hex directions (q, r)
+HEX_DIRECTIONS = [
+    (1, 0), (1, -1), (0, -1),
+    (-1, 0), (-1, 1), (0, 1)
+]
 
 # --- Resources & Building Requirements ---
 RESOURCE_POOL = [
@@ -106,7 +111,15 @@ unit = {
     "inventory": [],
     "explored_spaces": []
 }
+unit["inventory"].append("Robot")
+unit["inventory"].append("Algae")
+unit["inventory"].append("Algae")
+unit["inventory"].append("Algae")
+unit["inventory"].append("SpaceDust")
+unit["inventory"].append("SpaceDust")
+unit["inventory"].append("SpaceDust")
 
+robots = []  # Each robot is a dict with position, collected items, mode, etc.
 
 def get_space_by_id(space_id):
     for body in system["bodies"]:
@@ -136,9 +149,9 @@ def get_neighbors_within_radius(center_space, body, radius):
 
 
 # --- Routes ---
-@app.route('/api/system', methods=['GET'])
+@app.route('/api/system')
 def get_system():
-    return jsonify(system)
+	return jsonify({"system": system, "robots": robots})
 
 @app.route('/api/unit', methods=['GET'])
 def get_unit():
@@ -182,10 +195,42 @@ def move_unit():
 def collect_item():
     item_name = request.json.get("item")
     space = get_space_by_id(unit["current_space_id"])
-    if space and item_name in space["items"]:
+
+    if not space:
+        return jsonify(unit)
+
+    if item_name == "Robot":
+        if space.get("factory_robots", 0) > 0:
+            space["factory_robots"] -= 1
+            unit["inventory"].append("Robot")
+    elif item_name in space["items"]:
         space["items"].remove(item_name)
         unit["inventory"].append(item_name)
+
     return jsonify(unit)
+
+@app.route('/api/deploy_robot', methods=['POST'])
+def deploy_robot():
+    space_id = request.json.get("space_id")
+    space = get_space_by_id(space_id)
+    body = get_body_of_space(space_id)
+
+    if unit["inventory"].count("Robot") == 0:
+        return jsonify({"error": "No robots to deploy"}), 400
+
+    if space and body:
+        unit["inventory"].remove("Robot")
+        robots.append({
+            "current_space_id": space["id"],
+            "current_body_id": body["id"],
+            "collected_items": [],
+            "mode": "explore",
+            "turns_since_action": 0
+        })
+
+    return jsonify({"unit": unit, "system": system})
+
+
 
 @app.route('/api/build_building', methods=['POST'])
 def build_building():
@@ -219,20 +264,97 @@ def build_building():
 
 @app.route('/api/advance_time', methods=['POST'])
 def advance_time():
-    global time_tick
-    time_tick += 1
+	global time_tick
+	time_tick += 1
 
-    # Solar Generator
-    unit["inventory"].append("Fuel")
+	# Solar Generator
+	unit["inventory"].append("Fuel")
 
-    for body in system["bodies"]:
-        for space in body["spaces"]:
-            if space["building"] == "Fuel Pump":
-                fuel_count = space["items"].count("Fuel")
-                if fuel_count < 5:
-                    space["items"].append("Fuel")
+	print(f"\n[TURN {time_tick}] ROBOT SUMMARY:")
+	for i, robot in enumerate(robots):
+		print(f" - Robot {i}:")
+		print(f"     Pos: Body {robot['current_body_id']}, Space {robot['current_space_id']}")
+		print(f"     Items: {robot['collected_items']}")
+		print(f"     Mode: {robot['mode']}")
 
-    return jsonify({"time": time_tick, "unit": unit, "system": system})
+	# Add fuel from fuel pumps
+	for body in system["bodies"]:
+		for space in body["spaces"]:
+			if space.get("building") == "Fuel Pump":
+				if space["items"].count("Fuel") < 5:
+					space["items"].append("Fuel")
+
+	# Generate robots in factories
+	for body in system["bodies"]:
+		for space in body["spaces"]:
+			if space.get("building") == "Factory":
+				if "factory_robots" not in space:
+					space["factory_robots"] = 0
+				if space["factory_robots"] < 3:
+					space["factory_robots"] += 1
+
+	# --- Robot Logic ---
+	for robot in robots:
+		# Locate robot's current space and body
+		body = next((b for b in system["bodies"] if b["id"] == robot["current_body_id"]), None)
+		if not body:
+			continue
+		space = next((s for s in body["spaces"] if s["id"] == robot["current_space_id"]), None)
+		if not space:
+			continue
+
+		# Mark space as explored
+		if space["id"] not in unit["explored_spaces"]:
+			unit["explored_spaces"].append(space["id"])
+
+		# DEPOSIT MODE: If robot is full and at a Factory, deposit items
+		if len(robot["collected_items"]) >= 2 and space.get("building") == "Factory":
+			if "items" not in space:
+				space["items"] = []
+			space["items"].extend(robot["collected_items"])
+			robot["collected_items"] = []
+			continue  # Robot stays put this turn
+
+		# COLLECTION MODE: Try to collect
+		if len(robot["collected_items"]) < 2 and space.get("items"):
+			while len(robot["collected_items"]) < 2 and space["items"]:
+				robot["collected_items"].append(space["items"].pop())
+			continue  # Stay here this turn
+
+		# MOVEMENT: Decide target
+		target_space = None
+
+		if len(robot["collected_items"]) >= 2:
+			# Try to move toward a factory
+			factories = [
+				s for s in body["spaces"]
+				if s.get("building") == "Factory"
+			]
+			if factories:
+				# Pick the closest factory (currently naive approach: first match)
+				factory = factories[0]
+				dq = factory["q"] - space["q"]
+				dr = factory["r"] - space["r"]
+				# Find direction that minimizes distance
+				best_dir = min(HEX_DIRECTIONS, key=lambda d: abs(d[0] - dq) + abs(d[1] - dr))
+				new_q = space["q"] + best_dir[0]
+				new_r = space["r"] + best_dir[1]
+				target_space = next((s for s in body["spaces"] if s["q"] == new_q and s["r"] == new_r), None)
+
+		else:
+			# Otherwise move randomly
+			dir = random.choice(HEX_DIRECTIONS)
+			new_q = space["q"] + dir[0]
+			new_r = space["r"] + dir[1]
+			target_space = next((s for s in body["spaces"] if s["q"] == new_q and s["r"] == new_r), None)
+
+		# Move robot
+		if target_space:
+			robot["current_space_id"] = target_space["id"]
+			if target_space["id"] not in unit["explored_spaces"]:
+				unit["explored_spaces"].append(target_space["id"])
+
+	return jsonify({"time": time_tick, "unit": unit, "system": system, "robots": robots})
 
 if __name__ == '__main__':
     app.run(debug=True)

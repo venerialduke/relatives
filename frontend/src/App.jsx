@@ -52,16 +52,21 @@ function App() {
 	const [unit, setUnit] = useState(null);
 	const [selectedSpace, setSelectedSpace] = useState(null);
 	const [message, setMessage] = useState('');
+  const [deployingRobot, setDeployingRobot] = useState(false);
 
   const centerX = 600;
   const centerY = 500;  // was 400 — increased to push map downward
   const [turnTimer, setTurnTimer] = useState(15);
   const [facingIndex, setFacingIndex] = useState(0);
+  const [robots, setRobots] = useState([]);
 
 	useEffect(() => {
 		fetch('/api/system')
-			.then(res => res.json())
-			.then(data => setSystem(data));
+      .then(res => res.json())
+      .then(data => {
+        setSystem(data.system);
+        setRobots(data.robots || []);
+      });
 
 		fetch('/api/unit')
 			.then(res => res.json())
@@ -148,16 +153,16 @@ function App() {
         // Then update system and selected space
         fetch('/api/system')
           .then(res => res.json())
-          .then(newSystem => {
-            setSystem(newSystem);
+          .then(data => {
+            setSystem(data.system);
+            setRobots(data.robots || []);
 
-            // 🟦 Automatically update selectedSpace to current unit location
-            const currentSpace = newSystem.bodies
+            const currentSpace = data.system.bodies
               .flatMap(b => b.spaces)
               .find(s => s.id === updatedUnit.current_space_id);
-
             setSelectedSpace(currentSpace || null);
           });
+
       });
   };
 
@@ -179,18 +184,19 @@ function App() {
         // Refresh the system and selected space
         fetch('/api/system')
           .then(res => res.json())
-          .then(newSystem => {
-            setSystem(newSystem);
+          .then(data => {
+            setSystem(data.system);
+            setRobots(data.robots || []);
 
-            // Find updated selected space from new system
-            const updatedSpace = newSystem.bodies
+            const updatedSpace = data.system.bodies
               .flatMap(body => body.spaces)
               .find(space => space.id === selectedSpace.id);
-            
+
             if (updatedSpace) {
               setSelectedSpace(updatedSpace);
             }
           });
+
       });
   };
 
@@ -223,7 +229,11 @@ function App() {
               if (updatedSpace) {
                 setSelectedSpace(updatedSpace);
               }
-            });
+            })
+          .then(data => {
+            setSystem(data.system);
+            setRobots(data.robots || []);
+          });
 
           setMessage(`${building} built!`);
         }
@@ -251,7 +261,39 @@ function App() {
         onContextMenu={(e) => {
           e.preventDefault();
           setSelectedSpace(space);
-          moveUnit(space.id);
+
+          if (deployingRobot) {
+            // Deploy robot here
+            const currentSpace = system.bodies
+              .flatMap(b => b.spaces)
+              .find(s => s.id === unit.current_space_id);
+
+            const [dq, dr] = [space.q - currentSpace.q, space.r - currentSpace.r];
+            const isAdjacent = HEX_DIRECTIONS.some(([dQ, dR]) => dQ === dq && dR === dr);
+
+            if (!isAdjacent) {
+              setMessage("Robots can only be deployed to adjacent spaces.");
+              return;
+            }
+            fetch('/api/deploy_robot', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ space_id: space.id })
+            })
+              .then(res => res.json())
+              .then(data => {
+                setUnit({
+                  ...data.unit,
+                  inventory_summary: summarizeInventory(data.unit.inventory)
+                });
+                setSystem(data.system);
+                setMessage("Robot deployed.");
+                setDeployingRobot(false);
+              });
+          } else {
+            // Regular movement
+            moveUnit(space.id);
+          }
         }}
       >
         <title>
@@ -270,6 +312,9 @@ function App() {
           stroke="#333"
         />
         {textLabel(space.building, 0, 0, '8px', 'blue')}
+        {robots.some(r => r.current_space_id === space.id) && (
+          <circle cx={0} cy={0} r={5} fill="red" />
+        )}
       </g>
     );
   };
@@ -286,10 +331,12 @@ function App() {
           inventory_summary: summarizeInventory(data.unit.inventory)
         });
         setSystem(data.system);
+        setRobots(data.robots || []);
         setMessage(`Time advanced to ${data.time}`);
-        setTurnTimer(TURN_INTERVAL); // Reset countdown if manually triggered
+        setTurnTimer(TURN_INTERVAL);
       });
   };
+
 
 
 	const inventoryMap = unit?.inventory?.reduce((acc, item) => {
@@ -365,24 +412,63 @@ function App() {
 
       <div className="sidebar">
         <h2>Inventory</h2>
+        {deployingRobot && <p style={{ color: 'purple' }}>Right-click a space to deploy a robot</p>}
         <button onClick={advanceTime}>Next Turn</button>
         <p>Next turn in: {turnTimer}s</p>
         <button onClick={advanceTime}>Next Turn</button>
+
+
+        {robots.length > 0 && (
+          <div>
+            <h3>Robots</h3>
+            <ul>
+              {robots.map((robot, i) => {
+                const body = system?.bodies.find(b =>
+                  b.spaces.some(s => s.id === robot.current_space_id)
+                );
+                const space = body?.spaces.find(s => s.id === robot.current_space_id);
+                return (
+                  <li key={i}>
+                    Robot {i}: {robot.mode} mode @ {body?.name} / {space?.name}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <ul>
           {Object.entries(unit?.inventory_summary || {}).map(([item, count]) => (
-            <li key={item}>{item} x{count}</li>
+            <li key={item}>
+              {item} x{count}
+              {item === "Robot" && count > 0 && (
+                <button onClick={() => setDeployingRobot(true)}>Deploy</button>
+              )}
+            </li>
           ))}
         </ul>
 
         {selectedSpace && (
           <>
             <h2>{selectedSpace.name}</h2>
+            {selectedSpace.building === "Factory" && selectedSpace.factory_robots > 0 && (
+              <div>
+                <p>Factory Robots: {selectedSpace.factory_robots}</p>
+                <ul>
+                  {Array.from({ length: selectedSpace.factory_robots }).map((_, i) => (
+                    <li key={i}>
+                      Robot <button onClick={() => collectItem("Robot")}>Collect</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {selectedSpace.items.length > 0 ? (
               <div>
                 <p>Resources:</p>
                 <ul>
-                  {selectedSpace.items.map(item => (
-                    <li key={item}>
+                  {selectedSpace.items.map((item, index) => (
+                    <li key={`${item}-${index}`}>
                       {item} <button onClick={() => collectItem(item)}>Collect</button>
                     </li>
                   ))}
