@@ -17,7 +17,8 @@ BUILDING_REQUIREMENTS = {
     "Collector": {"Silver": 2, "Ore": 1},
     "Factory": {"Algae": 2, "SpaceDust": 3},
     "Settlement": {"Fungus": 4},
-    "Fuel Pump": {"Ore": 2, "Crystal": 1}
+    "Fuel Pump": {"Ore": 2, "Crystal": 1},
+    "Scanner": {"Ore": 1, "Silicon": 1}
 }
 
 BODY_DEFINITIONS = [
@@ -102,8 +103,10 @@ system = {
 unit = {
     "id": 1,
     "current_space_id": 1,
-    "inventory": []
+    "inventory": [],
+    "explored_spaces": []
 }
+
 
 def get_space_by_id(space_id):
     for body in system["bodies"]:
@@ -124,6 +127,14 @@ def deduct_resources(inventory, cost_dict):
         for _ in range(amt):
             inventory.remove(res)
 
+def get_neighbors_within_radius(center_space, body, radius):
+    q0, r0 = center_space["q"], center_space["r"]
+    return [
+        s for s in body["spaces"]
+        if max(abs(s["q"] - q0), abs(s["r"] - r0), abs((-s["q"] - s["r"]) - (-q0 - r0))) <= radius
+    ]
+
+
 # --- Routes ---
 @app.route('/api/system', methods=['GET'])
 def get_system():
@@ -143,6 +154,10 @@ def move_unit():
     current_space = get_space_by_id(unit["current_space_id"])
     target_body = get_body_of_space(target_id)
     current_body = get_body_of_space(current_space["id"])
+    unit["current_space_id"] = target_id
+    if target_id not in unit["explored_spaces"]:
+        unit["explored_spaces"].append(target_id)
+
 
     # Same-body movement must be adjacent
     if target_body["id"] == current_body["id"]:
@@ -193,6 +208,12 @@ def build_building():
 
     deduct_resources(unit["inventory"], requirements)
     space["building"] = building_name
+    if building_name == "Scanner":
+        body = get_body_of_space(space["id"])
+        for neighbor in get_neighbors_within_radius(space, body, radius=2):
+            if neighbor["id"] not in unit["explored_spaces"]:
+                unit["explored_spaces"].append(neighbor["id"])
+
 
     return jsonify({"success": True, "space": space, "unit": unit})
 

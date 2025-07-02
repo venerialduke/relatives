@@ -234,11 +234,15 @@ function App() {
 	const textLabel = (text, x, y, size = '12px', color = 'black') =>
 		text ? <text x={x} y={y} textAnchor="middle" fontSize={size} fill={color}>{text}</text> : null;
 
-  const renderHex = (x, y, space, isCurrent, isFacing) => {
+  const renderHex = (x, y, space, isCurrent, isFacing, isExplored, isSelected) => {
+    
     let fill = '#ddd';
     if (isCurrent) fill = 'lightgreen';
     else if (isFacing) fill = 'purple';
+    else if (isSelected) fill = '#66ccff';
+    else if (isExplored) fill = '#999'; // grayish if explored
     else if (isReachable(space.id)) fill = '#ffffcc';
+
 
     return (
       <g
@@ -250,6 +254,11 @@ function App() {
           moveUnit(space.id);
         }}
       >
+        <title>
+          {[space.name, isExplored && space.items?.length ? 'Known Resources: ' + space.items.join(', ') : null]
+            .filter(Boolean)
+            .join('\n')}
+        </title>
         <polygon
           points={Array.from({ length: 6 }, (_, i) => {
             const angle = Math.PI / 3 * i + Math.PI / 6;
@@ -330,6 +339,8 @@ function App() {
                 {body.spaces.map((space, sIdx) => {
                   const [dx, dy] = hexCoords[sIdx];
                   const isCurrent = unit?.current_space_id === space.id;
+                  const isExplored = unit?.explored_spaces?.includes(space.id);
+                  const isSelected = selectedSpace?.id === space.id;
 
                   // 👇 Determine if this space is the one we're facing
                   let isFacing = false;
@@ -343,7 +354,7 @@ function App() {
                     }
                   }
 
-                  return renderHex(dx, dy, space, isCurrent, isFacing);
+                  return renderHex(dx, dy, space, isCurrent, isFacing, isExplored, isSelected);
                 })}
 
               </g>
@@ -385,7 +396,8 @@ function App() {
                 Collector: { Silver: 2, Ore: 1 },
                 Factory: { Algae: 2, SpaceDust: 3 },
                 Settlement: { Fungus: 4 },
-                "Fuel Pump":{ Ore: 2, Crystal: 1 }
+                "Fuel Pump":{ Ore: 2, Crystal: 1 },
+                "Scanner": { Ore: 1, Silicon: 1 }
               }).map(([name, reqs]) => {
                 const inv = unit?.inventory || [];
                 return (
