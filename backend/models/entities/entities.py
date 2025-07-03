@@ -2,22 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from abc import ABC, abstractmethod
 from abilities import Ability
-
-class Actor(ABC):
-    @abstractmethod
-    def to_dict(self) -> dict:
-        pass
-
-    @property
-    @abstractmethod
-    def location_space_id(self) -> int:
-        pass
-
-    @property
-    @abstractmethod
-    def abilities(self) -> list:
-        pass
-
+from entities.base import Actor  
 
 @dataclass
 class Resource:

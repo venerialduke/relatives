@@ -1,6 +1,6 @@
 # gameowner/player.py
 
-from gameowner.base import GameOwner
+from gameowners.base import GameOwner
 
 class Player(GameOwner):
     def __init__(self, name: str, description: str = "", player_id: str = ""):
