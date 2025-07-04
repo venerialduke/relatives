@@ -5,12 +5,12 @@ import uuid
 import random
 
 from models.entities.entities import Structure, Resource
-from models.entities.base import Unit
-from models.containers.base import Space, Body, System
+from models.containers.containers import Space, Body, System
 from models.gamemonitors.monitors import GameState
 from models.gameowners.owners import Player
-from models.abilities import MoveAbility,CollectAbility,BuildAbility
-from models.entities.entity_content import get_structure_class_by_type, STRUCTURE_CLS_MAP, PlayerUnit
+from models.abilities.abilities import MoveAbility,CollectAbility,BuildAbility
+from models.entities.structure_map import get_structure_class_by_type, STRUCTURE_CLS_MAP
+from models.entities.entity_content import PlayerUnit
 
 from utils.location_management import hex_distance, are_adjacent_coords, space_distance, are_adjacent_spaces
 
@@ -65,8 +65,6 @@ HEX_DIRECTIONS = [
 # --- Game State & Ownership Setup ---
 game_state = GameState()
 player = Player(name="Player 1", description="The human player")
-game_state.players[player.id] = player
-
 
 # Create the player unit
 player_unit = PlayerUnit(id="u1", location_space_id=None)
@@ -78,7 +76,11 @@ robots = []
 time_tick = 0
 
 # --- World Generation ---
-system = System(name="Eos System")
+system = System(
+    id=str(uuid.uuid4()),
+    name="Eos System",
+    location=(0, 0)  # or whatever default location you want
+)
 game_state.systems[system.id]=system
 
 def generate_system(system, player_unit, resource_pool, body_definitions):
@@ -87,32 +89,51 @@ def generate_system(system, player_unit, resource_pool, body_definitions):
 			id=f"body_{body_index + 1}",
 			system_id=system.id,
 			name=body_name,
-			location=(random.randint(-10, 10), random.randint(-10, 10))  # optional for visual layout
+			location=(random.randint(-10, 10), random.randint(-10, 10))
 		)
-		game_state.bodies[body.id]=body
+		game_state.bodies[body.id] = body
 
-		for _ in range(space_count):
-            space_id = str(uuid.uuid4())
-            space = Space(
+		for i in range(space_count):
+			space_id = str(uuid.uuid4())
+			space_name = f"{body.name} - Space {i+1}"
+			space_location = (0, 0)  # placeholder; real layout via q/r
+
+			space = Space(
 				id=space_id,
+				name=space_name,
+				location=space_location,
 				body_id=body.id,
-				inventory={},  # will populate below
+				inventory={},
 			)
-            game_state.spaces[space.id]=space
-            num_resources = random.randint(1, 4)
-            selected = random.sample(resource_pool, num_resources)
-            for resource in selected:
-                space.inventory[resource.id] = space.inventory.get(resource.id, 0) + 1
-            body.add_space(space)
-        system.bodies.append(body)
+
+			# Populate inventory
+			num_resources = random.randint(1, 4)
+			selected = random.sample(resource_pool, num_resources)
+			for resource in selected:
+				space.inventory[resource.id] = space.inventory.get(resource.id, 0) + 1
+
+			# Add to body and game state
+			body.add_space(space)
+			game_state.spaces[space.id] = space
+
+		system.bodies.append(body)
 
 	# Place unit at first space
-	first_space = system.bodies[0].spaces[0]
-	player_unit.current_space_id = first_space.id
+	if system.bodies and system.bodies[0].spaces:
+		player_unit.current_space_id = system.bodies[0].spaces[0].id
+	else:
+		raise ValueError("No spaces created; can't place unit.")
 
 	return system
 
-generate_system()
+
+system = generate_system(
+    system=system,
+    player_unit=player_unit,
+    resource_pool=RESOURCE_POOL,
+    body_definitions=BODY_DEFINITIONS
+)
+
 
 # --- Helper Functions ---
 def find_space(space_id):
@@ -162,23 +183,19 @@ def move_unit():
 	if not target:
 		return jsonify({"error": "Target space not found"}), 400
 
-	current = find_space(unit.current_space_id)
-	if not current:
-		return jsonify({"error": "Current unit location not found"}), 400
-
-	# Unified permission + ability execution
+	# Now we let the ability system handle all internal checks
 	result = player.perform_unit_ability(
 		actor_id=unit.id,
 		game_state=game_state,
 		ability="move",
-		from_space=current,
-		to_space=target
+		space_id=space_id  # <- passed into MoveAbility.perform()
 	)
 
 	if result:  # Any non-None return is treated as an error
 		return jsonify({"error": result}), 400
 
 	return jsonify(unit.to_dict())
+
 
 @app.route('/api/collect_item', methods=['POST'])
 def collect_item():

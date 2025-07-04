@@ -121,6 +121,8 @@ class Space(Container, InventoryMixin):
 			"body_id": self.body_id,
 			"location": (self.q, self.r),
 			"inventory": self.inventory,
+			"q": self.q,
+        	"r": self.r,
 			"buildings": [s.to_dict() for s in self.structures],
 			"units": [u.to_dict() for u in self.units]
 		}

@@ -3,7 +3,7 @@ from models.abilities.base import Ability
 from typing import Optional, Tuple
 from utils.location_management import space_distance, are_adjacent_spaces
 import uuid 
-from models.entities.entity_content import get_structure_class_by_type
+from models.entities.structure_map import get_structure_class_by_type
 
 
 class CollectAbility(Ability):
@@ -144,3 +144,19 @@ class MoveAbility(Ability):
 			entity.mark_explored(to_space.id)
 
 		return None  # success
+	
+	def perform(self, actor, game_state, **kwargs):
+		from_space_id = actor.location_space_id
+		to_space_id = kwargs.get("space_id")
+
+		if not to_space_id:
+			return "No destination specified"
+
+		from_space = game_state.spaces.get(from_space_id)
+		to_space = game_state.spaces.get(to_space_id)
+
+		if not from_space or not to_space:
+			return "Invalid space(s)"
+
+		error = self.execute_move(actor, from_space, to_space)
+		return "Moved successfully" if error is None else error
