@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional,Tuple
 from models.containers.containers import System, Body, Space 
 from models.entities.entities import Unit, Structure, Resource 
-
+from models.gameowners.owners import Player,SystemManager
 
 class GameState:
     def __init__(self):
@@ -12,6 +12,7 @@ class GameState:
         self.bodies: Dict[str, Body] = {}
         self.spaces: Dict[str, Space] = {}
         self.units: Dict[str, Unit] = {}
+        self.players: Dict[str,Player]
         self.structures: Dict[str, Structure] = {}
 
     def get_space_by_id(self, space_id: str) -> Optional[Space]:

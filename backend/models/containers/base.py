@@ -12,3 +12,6 @@ class Container(ABC):
 	@abstractmethod
 	def to_dict(self) -> dict:
 		pass
+	
+	def advance_time(self,game_state):
+		pass

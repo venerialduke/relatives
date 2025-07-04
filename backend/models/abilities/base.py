@@ -20,3 +20,6 @@ class Ability(ABC):
             "name": self.name,
             "description": self.description,
         }
+    
+    def advance_time(self,game_state):
+        pass

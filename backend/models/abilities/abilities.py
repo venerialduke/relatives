@@ -1,5 +1,10 @@
 # abilities.py
 from models.abilities.base import Ability
+from typing import Optional, Tuple
+from utils.location_management import space_distance, are_adjacent_spaces
+import uuid 
+from models.entities.entity_content import get_structure_class_by_type
+
 
 class CollectAbility(Ability):
 	def __init__(self):
@@ -66,21 +71,76 @@ class BuildAbility(Ability):
 
 	def perform(self, actor, game_state, **kwargs):
 		structure_type = kwargs.get("structure_type")
-		resource_cost = kwargs.get("resource_cost", {})  # {"algae": 2, "ore": 1}
+		resource_cost = kwargs.get("resource_cost", {})
 		current_space = game_state.get_space_by_id(actor.location_space_id)
+
+		if not structure_type:
+			return "No structure type specified."
+
+		if not current_space:
+			return "Invalid space."
 
 		if len(current_space.structures) >= current_space.max_buildings:
 			return "Cannot build — building slot full."
 
-		# Check resources
 		for res, amt in resource_cost.items():
 			if actor.inventory.get(res, 0) < amt:
 				return f"Insufficient resources: need {res} x{amt}"
 
-		# Spend resources
-		actor.update_inventory( {k: -v for k, v in resource_cost.items()} )
+		actor.update_inventory({k: -v for k, v in resource_cost.items()})
 
-		# Build
-		structure = game_state.build_structure(structure_type, location_space_id=current_space.id)
+		cls = get_structure_class_by_type(structure_type)
+		if not cls:
+			return f"Unknown structure type: {structure_type}"
+
+		structure_id = f"b_{uuid.uuid4().hex[:6]}"
+		structure = cls(id=structure_id, location_space_id=current_space.id)
+
 		current_space.structures.append(structure)
+		game_state.structures[structure.id] = structure
+
 		return f"Built {structure_type} on space {current_space.id}."
+
+class MoveAbility(Ability):
+	def __init__(self, max_distance=1, body_jump_cost=5, same_body_cost=1, resource_name="Fuel"):
+		super().__init__("move", "moves the entity")
+		self.max_distance = max_distance
+		self.body_jump_cost = body_jump_cost
+		self.same_body_cost = same_body_cost
+		self.resource_name = resource_name
+
+	def evaluate_move(self, entity, from_space, to_space) -> Tuple[bool, Optional[int], Optional[str]]:
+		"""
+		Returns: (can_move: bool, cost: int or None, error: str or None)
+		"""
+		if from_space.body_id == to_space.body_id:
+			distance = space_distance(from_space, to_space)
+			if distance > self.max_distance:
+				return False, None, "Target too far"
+			cost = self.same_body_cost * distance
+		else:
+			cost = self.body_jump_cost
+
+		# If the entity has no inventory, treat move as free
+		if not hasattr(entity, "inventory"):
+			return True, 0, None
+
+		available = entity.inventory.get(self.resource_name, 0)
+		if available < cost:
+			return False, cost, f"Not enough {self.resource_name}"
+
+		return True, cost, None
+
+	def execute_move(self, entity, from_space, to_space) -> Optional[str]:
+		can_move, cost, error = self.evaluate_move(entity, from_space, to_space)
+		if not can_move:
+			return error
+
+		if cost and hasattr(entity, "update_inventory"):
+			entity.update_inventory({self.resource_name: -cost})
+
+		entity.location_space_id = to_space.id
+		if hasattr(entity, "mark_explored"):
+			entity.mark_explored(to_space.id)
+
+		return None  # success
