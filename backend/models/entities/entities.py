@@ -3,10 +3,12 @@ from typing import List, Optional
 from abc import ABC, abstractmethod
 from models.abilities.base import Ability
 from models.entities.base import Actor  
+from typing import List, Dict
+from utils.resource_management import InventoryMixin
 
 @dataclass
 class Resource:
-    id: int
+    id: str
     name: str
     properties: dict
 
@@ -18,12 +20,12 @@ class Resource:
         }
 
 @dataclass
-class Structure(Actor):
-    id: int
+class Structure(Actor,InventoryMixin):
+    id: str
     name: str
-    location_space_id: int
+    location_space_id: str
     abilities: List[Ability] = field(default_factory=list)
-    inventory_resource_ids: List[int] = field(default_factory=list)
+    inventory: Dict[str, int] = field(default_factory=dict)  # {"resource_id": quantity}
 
     def to_dict(self):
         return {
@@ -31,15 +33,15 @@ class Structure(Actor):
             "name": self.name,
             "location_space_id": self.location_space_id,
             "abilities": [ability.to_dict() for ability in self.abilities],
-            "inventory_resource_ids": self.inventory_resource_ids
+            "inventory": self.inventory
         }
 
 @dataclass
 class Unit(Actor):
-    id: int
+    id: str
     name: str
-    location_space_id: int
-    inventory_resource_ids: List[int] = field(default_factory=list)
+    location_space_id: str
+    inventory: Dict[str, int] = field(default_factory=dict)  # {"resource_id": quantity}
     fuel: int = 0
     health: int = 100
     damage: int = 0
@@ -50,7 +52,7 @@ class Unit(Actor):
             "id": self.id,
             "name": self.name,
             "location_space_id": self.location_space_id,
-            "inventory_resource_ids": self.inventory_resource_ids,
+            "inventory": self.inventory,
             "fuel": self.fuel,
             "health": self.health,
             "damage": self.damage,

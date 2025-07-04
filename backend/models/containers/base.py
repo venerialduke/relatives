@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Container(ABC):
-	id: int
+	id: str
 	name: str
 	location: Tuple[int, int]  # float for system-level, but overridden
 

@@ -10,7 +10,7 @@ class Actor(ABC):
         pass
 
     @abstractmethod
-    def location_space_id(self) -> int:
+    def location_space_id(self) -> str:
         pass
 
     @abstractmethod

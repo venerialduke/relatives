@@ -2,10 +2,12 @@ from dataclasses import dataclass, field
 from typing import Tuple, List, Dict
 from models.containers.base import Container
 from models.entities.entities import Unit, Structure, Resource
+from utils.resource_management import InventoryMixin
+
 
 @dataclass
 class System(Container):
-	id: int
+	id: str
 	name: str
 	location: Tuple[float, float]  # galaxy position
 	bodies: List["Body"] = field(default_factory=list)
@@ -29,8 +31,8 @@ class System(Container):
 
 @dataclass
 class Body(Container):
-	id: int
-	system_id: int
+	id: str
+	system_id: str
 	name: str
 	location: Tuple[int, int]
 	spaces: List["Space"] = field(default_factory=list)
@@ -48,19 +50,18 @@ class Body(Container):
 		}
 	
 @dataclass
-class Space(Container):
-	id: int
-	body_id: int
+class Space(Container,InventoryMixin):
+	id: str
+	body_id: str
 	location: Tuple[int, int]
-	resources: List[Dict[str, int]] = field(default_factory=list)  # [{resource_id: int, quantity: int}]
+	inventory: Dict[str, int] = field(default_factory=dict)  # {"resource_id": quantity}
 	structures: List[Structure] = field(default_factory=list)
 	units: List[Unit] = field(default_factory=list)
-	max_resources: int = 3
 	max_buildings: int = 1
 	max_units: int = 2
 
 	def get_resources(self):
-		return self.resources 
+		return self.inventory 
 	
 	def get_structures(self):
 		return self.structures 
@@ -73,7 +74,7 @@ class Space(Container):
 			"id": self.id,
 			"body_id": self.body_id,
 			"location": self.location,
-			"resources": self.resources,
+			"inventory": self.inventory,
 			"buildings": [s.to_dict() for s in self.structures],
 			"units": [u.to_dict() for u in self.units]
 		}
