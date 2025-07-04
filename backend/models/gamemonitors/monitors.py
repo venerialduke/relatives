@@ -2,8 +2,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional,Tuple
-from containers.containers import System, Body, Space 
-from entities.entities import Unit, Structure, Resource 
+from models.containers.containers import System, Body, Space 
+from models.entities.entities import Unit, Structure, Resource 
 
 
 class GameState:

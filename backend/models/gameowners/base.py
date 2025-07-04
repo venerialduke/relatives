@@ -4,9 +4,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
-from entities.base import Actor
-from abilities.base import Ability
-from containers.base import Container
+from models.entities.base import Actor
+from models.entities.entities import Unit, Structure
+from models.abilities.base import Ability
+from models.containers.base import Container
 
 
 @dataclass
@@ -17,10 +18,10 @@ class GameOwner(ABC):
     containers: List[Container] = field(default_factory=list)
     abilities: List[Ability] = field(default_factory=list)
 
-    def get_units(self) -> List[Actor]:
+    def get_units(self) -> List[Unit]:
         return [e for e in self.entities if e.__class__.__name__.lower() == "unit"]
 
-    def get_structures(self) -> List[Actor]:
+    def get_structures(self) -> List[Structure]:
         return [e for e in self.entities if e.__class__.__name__.lower() == "structure"]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -32,7 +33,31 @@ class GameOwner(ABC):
             "abilities": [a.to_dict() for a in self.abilities],
         }
 
-    @abstractmethod
-    def perform(self, actor_id: int, game_state: Any, **kwargs):
-        """Delegates an action to one of the owner's actors."""
-        pass
+    def owns_actor(self, actor: Actor) -> bool:
+        return actor in self.entities
+
+    def perform_unit_ability(self, actor_id, game_state, **kwargs): 
+        actor = game_state.get_unit_by_id(actor_id)
+        if actor is None:
+            return f"Unit with ID {actor_id} not found."
+        if not self.owns_actor(actor):
+            return "Permission denied"
+        
+        ability_name = kwargs.get("ability")
+        if not ability_name:
+            return "No ability specified"
+
+        return actor.perform_ability(ability_name, game_state, **kwargs)
+
+    def perform_structure_ability(self, actor_id, game_state, **kwargs): 
+        actor = game_state.get_structure_by_id(actor_id)
+        if actor is None:
+            return f"Structure with ID {actor_id} not found."
+        if not self.owns_actor(actor):
+            return "Permission denied"
+        
+        ability_name = kwargs.get("ability")
+        if not ability_name:
+            return "No ability specified"
+
+        return actor.perform_ability(ability_name, game_state, **kwargs)

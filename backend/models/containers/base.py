@@ -2,14 +2,12 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Any
 from dataclasses import dataclass, field
 
+
+@dataclass
 class Container(ABC):
 	id: int
 	name: str
-	location: Tuple[int, int]  # or float for galaxy-level
-
-	@abstractmethod
-	def get_contents(self) -> List[Any]:
-		pass
+	location: Tuple[int, int]  # float for system-level, but overridden
 
 	@abstractmethod
 	def to_dict(self) -> dict:

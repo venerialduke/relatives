@@ -1,5 +1,5 @@
 # abilities.py
-from abilities.base import Ability
+from models.abilities.base import Ability
 
 class CollectAbility(Ability):
     def __init__(self):
@@ -7,13 +7,13 @@ class CollectAbility(Ability):
 
     def perform(self, actor, game_state, **kwargs):
         space = game_state.get_space_by_id(actor.location_space_id)
-        if not space or not space.resource_ids:
+        if not space or not space.resources:
             return "Nothing to collect."
         collected = []
-        while space.resource_ids and len(actor.inventory_resource_ids) < 5:
-            resource_id = space.resource_ids.pop()
-            actor.inventory_resource_ids.append(resource_id)
-            collected.append(resource_id)
+        while space.resources and len(actor.inventory_resource_ids) < 5:
+            resource = space.resources.pop()
+            actor.inventory_resource_ids.append(resource["id"])
+            collected.append(resource["id"])
         return f"Collected: {collected}"
 
 
@@ -41,11 +41,11 @@ class DeployAbility(Ability):
             return "Invalid deployment parameters."
 
         target_space = game_state.get_space_by_id(target_space_id)
-        if len(target_space.unit_ids) >= target_space.max_units:
+        if len(target_space.units) >= target_space.max_units:
             return "Target space full."
 
-        robot.location_space_id = target_space_id
-        target_space.unit_ids.append(robot.id)
+        robot.location_space_id = target_space.id
+        target_space.units.append(robot)
         return f"Deployed {robot.name} to space {target_space_id}."
 
 
@@ -57,10 +57,9 @@ class BuildAbility(Ability):
         structure_type = kwargs.get("structure_type")
         current_space = game_state.get_space_by_id(actor.location_space_id)
 
-        if len(current_space.building_ids) >= current_space.max_buildings:
+        if len(current_space.structures) >= current_space.max_buildings:
             return "Cannot build — building slot full."
 
-        # You can check resource requirements here
         structure = game_state.build_structure(structure_type, location_space_id=current_space.id)
-        current_space.building_ids.append(structure.id)
+        current_space.structures.append(structure)
         return f"Built {structure_type} on space {current_space.id}."

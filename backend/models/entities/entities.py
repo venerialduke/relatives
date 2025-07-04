@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 from abc import ABC, abstractmethod
-from abilities import Ability
-from entities.base import Actor  
+from models.abilities.base import Ability
+from models.entities.base import Actor  
 
 @dataclass
 class Resource:
