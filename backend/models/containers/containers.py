@@ -1,15 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Tuple, List, Dict, Set
+from typing import Tuple, List, Dict, Set, Optional
 from models.containers.base import Container
 from models.entities.entities import Unit, Structure, Resource
 from utils.resource_management import InventoryMixin
-from utils.location_management import space_distance, are_adjacent_spaces
+from utils.location_management import space_distance, are_adjacent_spaces, first_n_spiral_hexes
 
 @dataclass
 class System(Container):
-	id: str
-	name: str
-	location: Tuple[float, float]  # galaxy position
 	bodies: List["Body"] = field(default_factory=list)
 	gravity_wells: List[Dict] = field(default_factory=list)  # Just dicts for now
 
@@ -23,18 +20,16 @@ class System(Container):
 		return {
 			"id": self.id,
 			"name": self.name,
-			"location": self.location,
+			"location": (self.q, self.r),
+			"q": self.q,
+			"r": self.r,
 			"gravity_wells": self.gravity_wells,
 			"bodies": [b.to_dict() for b in self.bodies]
 		}
 
-
 @dataclass
 class Body(Container):
-	id: str
-	system_id: str
-	name: str
-	location: Tuple[int, int]
+	system_id: Optional[str] = None
 	spaces: List["Space"] = field(default_factory=list)
 
 	def get_spaces(self):
@@ -45,53 +40,51 @@ class Body(Container):
 			"id": self.id,
 			"name": self.name,
 			"system_id": self.system_id,
-			"location": self.location,
+			"location": (self.q, self.r),
+			"q": self.q,
+			"r": self.r,
 			"spaces": [s.to_dict() for s in self.spaces]
 		}
 
 	def _occupied_coords(self) -> Set[Tuple[int, int]]:
-		return {(s.q, s.r) for s in self.spaces}
+		return {(s.body_rel_q, s.body_rel_r) for s in self.spaces}
 
 	def add_space(self, space: "Space"):
-		"""
-		Assigns a (q, r) coordinate in spiral hex order, then adds the space.
-		"""
 		occupied = self._occupied_coords()
 
-		if not occupied:
-			space.q, space.r = 0, 0
-			self.spaces.append(space)
-			return
-
-		# Spiral walk from center outward
-		directions = [(1, 0), (1, -1), (0, -1),
-					  (-1, 0), (-1, 1), (0, 1)]
-
-		for radius in range(1, 100):  # Safety limit
-			q, r = 0, -radius
-			for direction in range(6):
-				for _ in range(radius):
-					dq, dr = directions[direction]
-					if (q, r) not in occupied:
-						space.q, space.r = q, r
-						self.spaces.append(space)
-						return
-					q += dq
-					r += dr
+		for q, r in first_n_spiral_hexes(100):  # Safety limit
+			if (q, r) not in occupied:
+				space.set_coords_relative_to_body(q, r, self.q, self.r)
+				self.spaces.append(space)
+				return
 
 		raise Exception("Could not find free space to place new hex.")
 
 @dataclass
 class Space(Container, InventoryMixin):
-	id: str
-	body_id: str
-	q: int = 0
-	r: int = 0
+	body_id: Optional[str] = None
+	body_rel_q: int = 0
+	body_rel_r: int = 0
 	inventory: Dict[str, int] = field(default_factory=dict)
 	structures: List[Structure] = field(default_factory=list)
 	units: List[Unit] = field(default_factory=list)
 	max_buildings: int = 1
 	max_units: int = 2
+
+	def get_relative_coords(self):
+		return (self.body_rel_q, self.body_rel_r)
+	
+	def get_coords(self):
+		return (self.q, self.r)
+
+	def set_coords(self, q: int, r: int):
+		self.q = q
+		self.r = r
+
+	def set_coords_relative_to_body(self, dq: int, dr: int, body_q: int, body_r: int):
+		self.body_rel_q = dq
+		self.body_rel_r = dr
+		self.set_coords( body_q + dq , body_r + dr )
 
 	def get_resources(self):
 		return self.inventory 
@@ -101,10 +94,6 @@ class Space(Container, InventoryMixin):
 	
 	def get_units(self):
 		return self.units
-
-	def set_coords(self, q: int, r: int):
-		self.q = q
-		self.r = r
 
 	def get_neighbors_within_radius(self, all_spaces: List["Space"], radius: int) -> List["Space"]:
 		return [
@@ -120,9 +109,10 @@ class Space(Container, InventoryMixin):
 			"id": self.id,
 			"body_id": self.body_id,
 			"location": (self.q, self.r),
-			"inventory": self.inventory,
 			"q": self.q,
-        	"r": self.r,
+			"r": self.r,
+			"inventory": self.inventory,
+			"body_rel_location": (self.body_rel_q, self.body_rel_r),
 			"buildings": [s.to_dict() for s in self.structures],
 			"units": [u.to_dict() for u in self.units]
 		}

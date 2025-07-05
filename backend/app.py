@@ -12,7 +12,7 @@ from models.abilities.abilities import MoveAbility,CollectAbility,BuildAbility
 from models.entities.structure_map import get_structure_class_by_type, STRUCTURE_CLS_MAP
 from models.entities.entity_content import PlayerUnit
 
-from utils.location_management import hex_distance, are_adjacent_coords, space_distance, are_adjacent_spaces
+from utils.location_management import hex_distance, are_adjacent_coords, space_distance, are_adjacent_spaces, estimate_body_radius
 
 app = Flask(__name__)
 CORS(app)
@@ -79,29 +79,65 @@ time_tick = 0
 system = System(
     id=str(uuid.uuid4()),
     name="Eos System",
-    location=(0, 0)  # or whatever default location you want
+    q=0,
+	r=0
 )
 game_state.systems[system.id]=system
 
 def generate_system(system, player_unit, resource_pool, body_definitions):
+	used_coords = set()
+	radius_between_bodies = 2  # Extra spacing beyond footprint
+	directions = HEX_DIRECTIONS
+
+	def is_area_free(center_q, center_r, radius):
+		for dq in range(-radius, radius + 1):
+			for dr in range(max(-radius, -dq - radius), min(radius, -dq + radius) + 1):
+				q, r = center_q + dq, center_r + dr
+				if (q, r) in used_coords:
+					return False
+		return True
+
+	def mark_area_used(center_q, center_r, radius):
+		for dq in range(-radius, radius + 1):
+			for dr in range(max(-radius, -dq - radius), min(radius, -dq + radius) + 1):
+				q, r = center_q + dq, center_r + dr
+				used_coords.add((q, r))
+
+	def find_open_coord(required_radius):
+		# Spiral out to find usable open body anchor
+		for radius in range(1, 100):
+			q, r = 0, -radius
+			for direction in range(6):
+				for _ in range(radius):
+					dq, dr = directions[direction]
+					cand_q, cand_r = q + random.choice([-1, 0, 1]), r + random.choice([-1, 0, 1])
+					cand_q *= (required_radius + radius_between_bodies)
+					cand_r *= (required_radius + radius_between_bodies)
+					if is_area_free(cand_q, cand_r, required_radius + radius_between_bodies):
+						mark_area_used(cand_q, cand_r, required_radius)
+						return (cand_q, cand_r)
+					q += dq
+					r += dr
+		raise Exception("Failed to find non-overlapping body location")
+
 	for body_index, (body_name, space_count) in enumerate(body_definitions):
+		body_radius = estimate_body_radius(space_count)
+		body_q, body_r = find_open_coord(body_radius)
+
 		body = Body(
 			id=f"body_{body_index + 1}",
 			system_id=system.id,
 			name=body_name,
-			location=(random.randint(-10, 10), random.randint(-10, 10))
+			q=body_q,
+			r=body_r,
 		)
 		game_state.bodies[body.id] = body
 
 		for i in range(space_count):
 			space_id = str(uuid.uuid4())
-			space_name = f"{body.name} - Space {i+1}"
-			space_location = (0, 0)  # placeholder; real layout via q/r
-
 			space = Space(
 				id=space_id,
-				name=space_name,
-				location=space_location,
+				name=f"{body.name} - Space {i+1}",
 				body_id=body.id,
 				inventory={},
 			)
@@ -112,7 +148,6 @@ def generate_system(system, player_unit, resource_pool, body_definitions):
 			for resource in selected:
 				space.inventory[resource.id] = space.inventory.get(resource.id, 0) + 1
 
-			# Add to body and game state
 			body.add_space(space)
 			game_state.spaces[space.id] = space
 
@@ -125,7 +160,6 @@ def generate_system(system, player_unit, resource_pool, body_definitions):
 		raise ValueError("No spaces created; can't place unit.")
 
 	return system
-
 
 system = generate_system(
     system=system,

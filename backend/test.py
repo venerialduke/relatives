@@ -1,36 +1,4 @@
-from typing import Tuple, Union, List
-
-def hex_distance(a: Tuple[int, int], b: Tuple[int, int]) -> int:
-	"""
-	Returns the hex distance between two axial coordinates.
-	"""
-	q1, r1 = a
-	q2, r2 = b
-	return max(abs(q1 - q2), abs(r1 - r2), abs((-q1 - r1) - (-q2 - r2)))
-
-def are_adjacent_coords(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
-	"""
-	Returns True if the two axial coordinates are adjacent.
-	"""
-	return hex_distance(a, b) == 1
-
-def space_distance(s1,s2):
-	return hex_distance((s1.q, s1.r), (s2.q, s2.r))
-
-def are_adjacent_spaces(s1, s2) -> bool:
-	"""
-	Returns True if two Space-like objects with .q and .r attributes are adjacent.
-	"""
-	return space_distance(s1,s2) == 1
-
-def estimate_body_radius(space_count):
-	# Inverse of: 1 + 3*r*(r-1)
-	# Use a simple lookup or solve quadratic
-	r = 1
-	while 1 + 3 * r * (r - 1) < space_count:
-		r += 1
-	return r
-
+from typing import List, Tuple
 
 DIRECTIONS = [
     (1, 0),   # E
@@ -76,3 +44,5 @@ def first_n_spiral_hexes(n):
         results.extend(hex_ring((0, 0), radius))
         radius += 1
     return results[:n]
+
+print(first_n_spiral_hexes(15))
