@@ -159,4 +159,4 @@ class MoveAbility(Ability):
 			return "Invalid space(s)"
 
 		error = self.execute_move(actor, from_space, to_space)
-		return "Moved successfully" if error is None else error
+		return None if error is None else error

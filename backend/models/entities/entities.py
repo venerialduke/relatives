@@ -6,6 +6,16 @@ from models.entities.base import Actor
 from typing import List, Dict
 from utils.resource_management import InventoryMixin
 
+from enum import IntEnum
+
+class HexDirection(IntEnum):
+    E = 0       # (1, 0)
+    NE = 1      # (1, -1)
+    NW = 2      # (0, -1)
+    W = 3       # (-1, 0)
+    SW = 4      # (-1, 1)
+    SE = 5      # (0, 1)
+
 @dataclass
 class Resource:
     id: str
@@ -27,6 +37,7 @@ class Structure(Actor, InventoryMixin):
 	abilities: List[Ability] = field(default_factory=list)
 	inventory: Dict[str, int] = field(default_factory=dict)
 	explored_spaces: List[str] = field(default_factory=list)
+	direction: int = HexDirection.E
 
 	def to_dict(self):
 		return {
@@ -48,6 +59,7 @@ class Unit(Actor,InventoryMixin):
 	damage: int = 0
 	abilities: List[Ability] = field(default_factory=list)
 	explored_spaces: List[str] = field(default_factory=list)
+	direction: int = HexDirection.E
 
 	def to_dict(self):
 		return {
@@ -55,7 +67,7 @@ class Unit(Actor,InventoryMixin):
 			"name": self.name,
 			"location_space_id": self.location_space_id,
 			"inventory": self.inventory,
-			"fuel": self.fuel,
+			"fuel": self.inventory.get("Fuel", 0),
 			"health": self.health,
 			"damage": self.damage,
 			"abilities": [ability.to_dict() for ability in self.abilities],

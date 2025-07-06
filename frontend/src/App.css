@@ -109,3 +109,15 @@ body {
 .inventory-list {
 	font-size: 0.85rem;
 }
+
+
+.hex {
+  stroke: #333;
+  stroke-width: 1;
+  fill: gray;
+}
+
+.player-hex {
+  stroke: #00ffff;  /* Cyan glow or whatever color you prefer */
+  stroke-width: 4;
+}

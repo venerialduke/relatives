@@ -61,10 +61,14 @@ HEX_DIRECTIONS = [
     (-1, 0), (-1, 1), (0, 1)
 ]
 
+def generate_space_id(body, rel_q, rel_r):
+    return f"body:{body.id}:{rel_q}:{rel_r}"
+
 # --- Global Game State ---
 # --- Game State & Ownership Setup ---
 game_state = GameState()
-player = Player(name="Player 1", description="The human player")
+player = Player(name="Player 1", description="The human player", player_id='player_1')
+game_state.players[player.player_id] = player
 
 # Create the player unit
 player_unit = PlayerUnit(id="u1", location_space_id=None)
@@ -134,13 +138,18 @@ def generate_system(system, player_unit, resource_pool, body_definitions):
 		game_state.bodies[body.id] = body
 
 		for i in range(space_count):
-			space_id = str(uuid.uuid4())
+
+			next_q, next_r = body.get_next_space_coords()
+			space_id = generate_space_id(body,next_q,next_r)
 			space = Space(
 				id=space_id,
+				body_rel_q=next_q,
+				body_rel_r=next_r,
 				name=f"{body.name} - Space {i+1}",
 				body_id=body.id,
 				inventory={},
 			)
+			space.set_global_coords(body.q,body.r)
 
 			# Populate inventory
 			num_resources = random.randint(1, 4)
@@ -155,7 +164,7 @@ def generate_system(system, player_unit, resource_pool, body_definitions):
 
 	# Place unit at first space
 	if system.bodies and system.bodies[0].spaces:
-		player_unit.current_space_id = system.bodies[0].spaces[0].id
+		player_unit.location_space_id = system.bodies[0].spaces[0].id
 	else:
 		raise ValueError("No spaces created; can't place unit.")
 
@@ -185,10 +194,32 @@ def find_unit(unit_id=None, unit_name=None):
 				return u
 	return None
 
+def find_player_units(player_id):
+    results = []
+    p = game_state.get_player_by_id(player_id)
+    for e in p.entities:
+        if isinstance(e, PlayerUnit):
+            results.append({
+						"unit_id": e.id,
+						"space_id": e.location_space_id,
+						"direction": e.direction
+					})
+    return jsonify(results)
+
+
 # --- Routes ---
 @app.route('/api/system')
 def get_system():
     return jsonify(system.to_dict())
+
+@app.route('/api/game_state')
+def get_game_state():
+    return jsonify(game_state.to_dict())
+
+@app.route("/api/player_units/<player_id>")
+def api_find_player_units(player_id):
+    return find_player_units(player_id)
+
 
 @app.route('/api/unit')
 def get_unit():
@@ -204,31 +235,54 @@ def get_unit():
 
 @app.route('/api/move_unit', methods=['POST'])
 def move_unit():
-	data = request.json
-	unit_id = data.get("unit_id")
-	unit_name = data.get("unit_name")
-	space_id = data.get("space_id")
+    data = request.json
+    unit_id = data.get("unit_id")
+    direction = data.get("direction")
 
-	unit = find_unit(unit_id, unit_name)
-	if not unit:
-		return jsonify({"error": "Unit not found"}), 404
+    unit = game_state.get_unit_by_id(unit_id)
+    if not unit or not isinstance(unit, PlayerUnit):
+        return jsonify({"error": "Unit not found"}), 404
 
-	target = find_space(space_id)
-	if not target:
-		return jsonify({"error": "Target space not found"}), 400
+    unit.direction = direction  # Update direction on the unit
 
-	# Now we let the ability system handle all internal checks
-	result = player.perform_unit_ability(
-		actor_id=unit.id,
-		game_state=game_state,
-		ability="move",
-		space_id=space_id  # <- passed into MoveAbility.perform()
-	)
+    current_space = game_state.get_space_by_id(unit.location_space_id)
+    if not current_space:
+        return jsonify({"error": "Current space not found"}), 400
 
-	if result:  # Any non-None return is treated as an error
-		return jsonify({"error": result}), 400
+    # Axial offset for this direction
+    dq, dr = HEX_DIRECTIONS[direction]
+    dest_q = current_space.body_rel_q + dq
+    dest_r = current_space.body_rel_r + dr
 
-	return jsonify(unit.to_dict())
+    # Find target space in same body
+    destination_id = generate_space_id( game_state.get_body_by_id(current_space.body_id), dest_q, dest_r)
+    destination = game_state.get_space_by_id(destination_id)
+
+    print("\n=== MOVE DEBUG ===")
+    print(f"Current space: {current_space.id}")
+    print(f"Direction: {direction}")
+    print(f"Offset: dq={dq}, dr={dr}")
+    print(f"Target rel coords: {dest_q}, {dest_r}")
+    print(f"Target id: {destination_id}")
+    print(f"All spaces in game_state: {list(game_state.spaces.keys())[:5]}... (total {len(game_state.spaces)})")
+    print("===================")
+
+    if not destination:
+        return jsonify({"error": "No space in that direction"}), 400
+
+    # Perform the move via the ability system
+    result = player.perform_unit_ability(
+        actor_id=unit.id,
+        game_state=game_state,
+        ability="move",
+        space_id=destination.id
+    )
+
+    if result:  # e.g. "not enough fuel", "too far", etc.
+        print("MoveAbility returned error:", result)
+        return jsonify({"error": result}), 400
+
+    return jsonify(unit.to_dict())
 
 
 @app.route('/api/collect_item', methods=['POST'])

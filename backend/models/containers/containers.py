@@ -47,16 +47,20 @@ class Body(Container):
 		}
 
 	def _occupied_coords(self) -> Set[Tuple[int, int]]:
-		return {(s.body_rel_q, s.body_rel_r) for s in self.spaces}
+		return {s.get_relative_coords() for s in self.spaces}
+
+	def get_next_space_coords(self, max_search=100):
+		occupied = self._occupied_coords()
+		for q, r in first_n_spiral_hexes(max_search):
+			if (q, r) not in occupied:
+				return q, r
+		raise Exception("Could not find free space location.")
 
 	def add_space(self, space: "Space"):
 		occupied = self._occupied_coords()
-
-		for q, r in first_n_spiral_hexes(100):  # Safety limit
-			if (q, r) not in occupied:
-				space.set_coords_relative_to_body(q, r, self.q, self.r)
-				self.spaces.append(space)
-				return
+		if space.get_relative_coords not in occupied:
+			self.spaces.append(space)
+			return
 
 		raise Exception("Could not find free space to place new hex.")
 
@@ -74,17 +78,12 @@ class Space(Container, InventoryMixin):
 	def get_relative_coords(self):
 		return (self.body_rel_q, self.body_rel_r)
 	
-	def get_coords(self):
+	def get_global_coords(self):
 		return (self.q, self.r)
 
-	def set_coords(self, q: int, r: int):
-		self.q = q
-		self.r = r
-
-	def set_coords_relative_to_body(self, dq: int, dr: int, body_q: int, body_r: int):
-		self.body_rel_q = dq
-		self.body_rel_r = dr
-		self.set_coords( body_q + dq , body_r + dr )
+	def set_global_coords(self, body_q: int, body_r: int):
+		self.q = body_q + self.body_rel_q
+		self.r = body_r + self.body_rel_r
 
 	def get_resources(self):
 		return self.inventory 
