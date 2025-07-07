@@ -2,8 +2,9 @@ from dataclasses import dataclass, field
 from typing import Tuple, List, Dict, Set, Optional
 from models.containers.base import Container
 from models.entities.entities import Unit, Structure, Resource
-from utils.resource_management import InventoryMixin
+from utils.resource_management import InventoryMixin, get_named_inventory
 from utils.location_management import space_distance, are_adjacent_spaces, first_n_spiral_hexes
+
 
 @dataclass
 class System(Container):
@@ -25,6 +26,24 @@ class System(Container):
 			"r": self.r,
 			"gravity_wells": self.gravity_wells,
 			"bodies": [b.to_dict() for b in self.bodies]
+		}
+
+	def to_dict_details(self, game_state):
+		return {
+			"id": self.id,
+			"bodies": [
+				{
+					"id": body.id,
+					"name": body.name,
+					"q": body.q,
+					"r": body.r,
+					"spaces": [
+						space.to_dict(game_state=game_state, body=body, index=i)
+						for i, space in enumerate(body.spaces)
+					]
+				}
+				for body in self.bodies
+			]
 		}
 
 @dataclass
@@ -103,8 +122,8 @@ class Space(Container, InventoryMixin):
 	def is_adjacent_to(self, other: "Space") -> bool:
 		return are_adjacent_spaces(self, other)
 
-	def to_dict(self):
-		return {
+	def to_dict(self, game_state=None, body=None, index=None):
+		data = {
 			"id": self.id,
 			"body_id": self.body_id,
 			"location": (self.q, self.r),
@@ -115,3 +134,11 @@ class Space(Container, InventoryMixin):
 			"buildings": [s.to_dict() for s in self.structures],
 			"units": [u.to_dict() for u in self.units]
 		}
+
+		if game_state:
+			data["named_inventory"] = get_named_inventory(self.inventory, game_state)
+		if body:
+			data["body_name"] = body.name
+		if index is not None:
+			data["space_index"] = index
+		return data

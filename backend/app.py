@@ -11,11 +11,13 @@ from models.gameowners.owners import Player
 from models.abilities.abilities import MoveAbility,CollectAbility,BuildAbility
 from models.entities.structure_map import get_structure_class_by_type, STRUCTURE_CLS_MAP
 from models.entities.entity_content import PlayerUnit
-
+from utils.resource_management import get_named_inventory
 from utils.location_management import hex_distance, are_adjacent_coords, space_distance, are_adjacent_spaces, estimate_body_radius
 
 app = Flask(__name__)
 CORS(app)
+
+game_state = GameState()
 
 # --- Constants ---
 def generate_resource_pool(input_resource_map):
@@ -27,16 +29,24 @@ def generate_resource_pool(input_resource_map):
             properties={}
         )
         resource_list.append(resource)
+        game_state.resources[resource.id] = resource
     return resource_list
 
 RESOURCE_NAMES = [
     "Iron", "Crystal", "Gas", "Ice", "Silver", "Algae",
     "Silicon", "Copper", "Sand", "Carbon", "Nickel", "Stone",
     "Obsidian", "Quartz", "Dust", "Water", "Oil", "Fish",
-    "Plasma", "Fungus", "Xenonite", "Ore", "SpaceDust", "Fuel"
+    "Plasma", "Fungus", "Xenonite", "Ore", "SpaceDust"
 ]
 
 RESOURCE_POOL = generate_resource_pool(RESOURCE_NAMES)
+
+#Add fuel
+FUEL_ID = 'fuel'
+FuelResource = Resource(id=FUEL_ID,name='Fuel',properties={})
+RESOURCE_POOL.append(FuelResource)
+game_state.resources[FUEL_ID] = FuelResource
+#FUEL_ID = next((res.id for res in RESOURCE_POOL if res.name == "Fuel"), None)
 
 STRUCTURE_REQUIREMENTS = {
     "Collector": {"Silver": 2, "Ore": 1},
@@ -66,13 +76,14 @@ def generate_space_id(body, rel_q, rel_r):
 
 # --- Global Game State ---
 # --- Game State & Ownership Setup ---
-game_state = GameState()
+
 player = Player(name="Player 1", description="The human player", player_id='player_1')
 game_state.players[player.player_id] = player
 
 # Create the player unit
 player_unit = PlayerUnit(id="u1", location_space_id=None)
-player_unit.update_inventory({"Fuel": 10})
+player_unit.update_inventory({FUEL_ID: 10})
+
 player.entities.append(player_unit)  # mark ownership
 game_state.units[player_unit.id] = player_unit
 
@@ -199,18 +210,14 @@ def find_player_units(player_id):
     p = game_state.get_player_by_id(player_id)
     for e in p.entities:
         if isinstance(e, PlayerUnit):
-            results.append({
-						"unit_id": e.id,
-						"space_id": e.location_space_id,
-						"direction": e.direction
-					})
+            results.append(e.to_dict(game_state=game_state))
     return jsonify(results)
 
 
 # --- Routes ---
 @app.route('/api/system')
 def get_system():
-    return jsonify(system.to_dict())
+    return jsonify(system.to_dict_details(game_state=game_state))
 
 @app.route('/api/game_state')
 def get_game_state():

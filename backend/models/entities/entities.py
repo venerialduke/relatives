@@ -4,9 +4,11 @@ from abc import ABC, abstractmethod
 from models.abilities.base import Ability
 from models.entities.base import Actor  
 from typing import List, Dict
-from utils.resource_management import InventoryMixin
+from utils.resource_management import InventoryMixin, get_named_inventory
 
 from enum import IntEnum
+
+FUEL_ID = 'fuel'
 
 class HexDirection(IntEnum):
     E = 0       # (1, 0)
@@ -39,15 +41,21 @@ class Structure(Actor, InventoryMixin):
 	explored_spaces: List[str] = field(default_factory=list)
 	direction: int = HexDirection.E
 
-	def to_dict(self):
-		return {
+	def to_dict(self, game_state=None):
+		data = {
 			"id": self.id,
 			"name": self.name,
 			"location_space_id": self.location_space_id,
+			"direction": self.direction,
 			"abilities": [ability.to_dict() for ability in self.abilities],
 			"inventory": self.inventory,
 			"explored_spaces":self.explored_spaces
 		}
+
+		if game_state:
+			data["named_inventory"] = get_named_inventory(self.inventory, game_state)
+
+		return data
 
 @dataclass
 class Unit(Actor,InventoryMixin):
@@ -61,15 +69,21 @@ class Unit(Actor,InventoryMixin):
 	explored_spaces: List[str] = field(default_factory=list)
 	direction: int = HexDirection.E
 
-	def to_dict(self):
-		return {
+	def to_dict(self, game_state=None):
+		data = {
 			"id": self.id,
 			"name": self.name,
 			"location_space_id": self.location_space_id,
+			"direction": self.direction,
 			"inventory": self.inventory,
-			"fuel": self.inventory.get("Fuel", 0),
+			"fuel": self.inventory.get(FUEL_ID, 0),
 			"health": self.health,
 			"damage": self.damage,
 			"abilities": [ability.to_dict() for ability in self.abilities],
 			"explored_spaces":self.explored_spaces
 		}
+
+		if game_state:
+			data["named_inventory"] = get_named_inventory(self.inventory, game_state)
+
+		return data

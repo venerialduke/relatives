@@ -23,6 +23,8 @@ class GameState:
         self.units: Dict[str, Unit] = {}
         self.players: Dict[str,Player] = {}
         self.structures: Dict[str, Structure] = {}
+        self.resources: Dict[str, Resource] = {}
+        
 
     def get_space_by_id(self, space_id: str) -> Optional[Space]:
         return self.spaces.get(space_id)
@@ -45,6 +47,9 @@ class GameState:
             space for space in body.spaces
             if abs(space.location[0] - cx) + abs(space.location[1] - cy) <= radius
         ]
+
+    def get_resource_by_id(self, resource_id: str) -> Optional[Resource]:
+        return self.resources.get(resource_id)
 
     def get_target_space_from_direction(self, current_space_id: str, direction: int) -> Optional[Space]:
         origin = self.get_space_by_id(current_space_id)

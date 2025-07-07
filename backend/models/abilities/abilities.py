@@ -5,6 +5,7 @@ from utils.location_management import space_distance, are_adjacent_spaces
 import uuid 
 from models.entities.structure_map import get_structure_class_by_type
 
+FUEL_ID = 'fuel'
 
 class CollectAbility(Ability):
 	def __init__(self):
@@ -102,12 +103,12 @@ class BuildAbility(Ability):
 		return f"Built {structure_type} on space {current_space.id}."
 
 class MoveAbility(Ability):
-	def __init__(self, max_distance=1, body_jump_cost=5, same_body_cost=1, resource_name="Fuel"):
+	def __init__(self, max_distance=1, body_jump_cost=5, same_body_cost=1, resource_id=FUEL_ID):
 		super().__init__("move", "moves the entity")
 		self.max_distance = max_distance
 		self.body_jump_cost = body_jump_cost
 		self.same_body_cost = same_body_cost
-		self.resource_name = resource_name
+		self.resource_id = resource_id
 
 	def evaluate_move(self, entity, from_space, to_space) -> Tuple[bool, Optional[int], Optional[str]]:
 		"""
@@ -125,9 +126,9 @@ class MoveAbility(Ability):
 		if not hasattr(entity, "inventory"):
 			return True, 0, None
 
-		available = entity.inventory.get(self.resource_name, 0)
+		available = entity.inventory.get(self.resource_id, 0)
 		if available < cost:
-			return False, cost, f"Not enough {self.resource_name}"
+			return False, cost, f"Not enough resources to move"
 
 		return True, cost, None
 
@@ -137,7 +138,7 @@ class MoveAbility(Ability):
 			return error
 
 		if cost and hasattr(entity, "update_inventory"):
-			entity.update_inventory({self.resource_name: -cost})
+			entity.update_inventory({self.resource_id: -cost})
 
 		entity.location_space_id = to_space.id
 		if hasattr(entity, "mark_explored"):

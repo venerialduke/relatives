@@ -1,5 +1,13 @@
 from typing import Dict
 
+
+def get_named_inventory(inventory: dict, game_state) -> dict:
+    return {
+        game_state.get_resource_by_id(rid).name: qty
+        for rid, qty in inventory.items()
+        if rid in game_state.resources
+    }
+
 def update_quantity_map(
 	target: Dict[str, int],
 	changes: Dict[str, int]
