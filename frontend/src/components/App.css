@@ -7,23 +7,25 @@ body {
 }
 
 .main-container {
-	display: flex;
+  display: flex;
+  height: 100vh; /* Ensures full height */
+  overflow: hidden;
 }
 
 .map-container {
-	flex: 1;
-	overflow: auto;
-	padding: 10px;
+  flex: 1;
+  background: #0a0a0a;
+  overflow: hidden;  /* No scrollbars */
+  position: relative;
 }
 
 .sidebar {
-	width: 300px;
-	padding: 10px;
-	background-color: #000; /* Changed from #f8f8f8 to black */
-	color: #fff;            /* Ensure text is white */
-	border-left: 1px solid #333; /* Darker border for contrast */
-	height: 100vh;
-	overflow-y: auto;
+  width: 300px;
+  background-color: #000;
+  color: #fff;
+  padding: 1rem;
+  border-left: 1px solid #333;
+  overflow-y: auto;
 }
 
 .sidebar h2,
@@ -37,9 +39,6 @@ body {
 	margin-left: 10px;
 }
 
-.map-container {
-	padding: 1rem;
-}
 
 .system-grid {
 	display: flex;
@@ -108,4 +107,16 @@ body {
 
 .inventory-list {
 	font-size: 0.85rem;
+}
+
+
+.hex {
+  stroke: #333;
+  stroke-width: 1;
+  fill: gray;
+}
+
+.player-hex {
+  stroke: #00ffff;  /* Cyan glow or whatever color you prefer */
+  stroke-width: 4;
 }
