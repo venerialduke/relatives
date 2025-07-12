@@ -1,8 +1,10 @@
 
 import React from "react";
 import ResourceList from "./ResourceList";
+import ResourceCollector from "./ResourceCollector";
+import StructureBuilder from "./StructureBuilder";
 
-function Sidebar({ system, playerUnits }) {
+function Sidebar({ system, playerUnits, refreshState }) {
   const playerUnit = playerUnits?.[0];
   const currentSpaceId = playerUnit?.location_space_id;
   const unitInventory = playerUnit?.named_inventory;
@@ -33,6 +35,15 @@ function Sidebar({ system, playerUnits }) {
           <p><strong>Coordinates:</strong> ({currentSpace.q}, {currentSpace.r})</p>
 
           <ResourceList title="Resources on Space" resources={currentSpace.named_inventory} />
+          <ResourceCollector 
+            currentSpace={currentSpace} 
+            playerUnit={playerUnit} 
+            refreshState={refreshState} 
+          />
+          <StructureBuilder 
+            playerUnit={playerUnit} 
+            refreshState={refreshState} 
+          />
           <ResourceList title="Unit Inventory" resources={unitInventory} />
         </>
       ) : (

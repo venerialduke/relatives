@@ -50,6 +50,13 @@ class GameState:
 
     def get_resource_by_id(self, resource_id: str) -> Optional[Resource]:
         return self.resources.get(resource_id)
+    
+    def find_resource_by_name(self, resource_name: str) -> Optional[str]:
+        """Find resource ID by resource name"""
+        for resource_id, resource in self.resources.items():
+            if resource.name == resource_name:
+                return resource_id
+        return None
 
     def get_target_space_from_direction(self, current_space_id: str, direction: int) -> Optional[Space]:
         origin = self.get_space_by_id(current_space_id)

@@ -15,6 +15,12 @@ class Settlement(Structure):
 class FuelPump(Structure):
     def __init__(self, id: str, location_space_id: str):
         super().__init__(id=id, name="Fuel Pump", location_space_id=location_space_id)
+    
+    def advance_time(self, game_state):
+        # Generate 1 fuel per turn
+        FUEL_ID = 'fuel'
+        self.update_inventory({FUEL_ID: 1})
+        super().advance_time(game_state)
 
 class Scanner(Structure):
     def __init__(self, id: str, location_space_id: str):

@@ -77,12 +77,35 @@ def generate_space_id(body, rel_q, rel_r):
 # --- Global Game State ---
 # --- Game State & Ownership Setup ---
 
+def get_starting_inventory():
+    """Generate starting inventory with enough resources to build all structures"""
+    # Resource requirements for all structures
+    required_resources = {
+        "Silver": 2,    # Collector
+        "Algae": 2,     # Factory
+        "Silicon": 1,   # Scanner
+        "Fungus": 4,    # Settlement
+        "Ore": 4,       # Collector (1) + FuelPump (2) + Scanner (1)
+        "SpaceDust": 3, # Factory
+        "Crystal": 1    # FuelPump
+    }
+    
+    # Convert resource names to IDs using game state
+    starting_inventory = {FUEL_ID: 10}  # Starting fuel
+    
+    for resource_name, quantity in required_resources.items():
+        resource_id = game_state.find_resource_by_name(resource_name)
+        if resource_id:
+            starting_inventory[resource_id] = quantity
+    
+    return starting_inventory
+
 player = Player(name="Player 1", description="The human player", player_id='player_1')
 game_state.players[player.player_id] = player
 
-# Create the player unit
+# Create the player unit (after resources are loaded)
 player_unit = PlayerUnit(id="u1", location_space_id=None)
-player_unit.update_inventory({FUEL_ID: 10})
+player_unit.update_inventory(get_starting_inventory())
 
 player.entities.append(player_unit)  # mark ownership
 game_state.units[player_unit.id] = player_unit
@@ -190,11 +213,18 @@ system = generate_system(
 
 
 # --- Helper Functions ---
+def find_resource_id_by_name(resource_name):
+    """Convert resource name to resource ID - deprecated, use game_state.find_resource_by_name()"""
+    return game_state.find_resource_by_name(resource_name)
+
 def find_space(space_id):
-    return system.get_space_by_id(space_id)
+    return game_state.get_space_by_id(space_id)
 
 def find_body_by_space(space_id):
-    return system.get_body_of_space(space_id)
+    space = game_state.get_space_by_id(space_id)
+    if space and space.body_id:
+        return game_state.get_body_by_id(space.body_id)
+    return None
 
 def find_unit(unit_id=None, unit_name=None):
 	if unit_id and unit_id in game_state.units:
@@ -296,29 +326,53 @@ def move_unit():
 def collect_item():
 	data = request.json
 	unit = find_unit(data.get("unit_id"), data.get("unit_name"))
-	space = find_space(data.get("space_id")) if data.get("space_id") else find_space(unit.current_space_id)
-	resource_id = data.get("resource_id")
+	space = find_space(data.get("space_id")) if data.get("space_id") else find_space(unit.location_space_id)
+	resource_input = data.get("resource_id")
 	quantity = data.get("quantity")
+	structure_id = data.get("structure_id")
 
 	if not unit:
 		return jsonify({"error": "Unit not found"}), 404
-	if not resource_id:
+	if not resource_input:
 		return jsonify({"error": "Missing resource_id"}), 400
 	if not space:
 		return jsonify({"error": "Space not found"}), 404
 
-	result = player.perform_unit_ability(
-		actor_id=unit.id,
-		game_state=game_state,
-		ability="collect",
-		resource_id=resource_id,
-		quantity=quantity
-	)
+	# Convert resource name to ID if needed
+	resource_id = find_resource_id_by_name(resource_input)
+	if not resource_id:
+		# Maybe it's already an ID, try using it directly
+		resource_id = resource_input
+
+	# If collecting from structure, collect from structure inventory
+	if structure_id:
+		structure = game_state.get_structure_by_id(structure_id)
+		if not structure:
+			return jsonify({"error": "Structure not found"}), 404
+		
+		available = structure.inventory.get(resource_id, 0)
+		if available <= 0:
+			return jsonify({"error": f"No {resource_input} available in structure"}), 400
+
+		take = min(quantity or available, available)
+		structure.update_inventory({resource_id: -take})
+		unit.update_inventory({resource_id: take})
+		
+		result = f"Collected {take} x {resource_input} from {structure.name}."
+	else:
+		# Collect from space using existing ability system
+		result = player.perform_unit_ability(
+			actor_id=unit.id,
+			game_state=game_state,
+			ability="collect",
+			resource_id=resource_id,
+			quantity=quantity
+		)
 
 	return jsonify({
 		"result": result,
-		"unit": unit.to_dict(),
-		"space": space.to_dict()
+		"unit": unit.to_dict(game_state=game_state),
+		"space": space.to_dict(game_state=game_state)
 	})
 
 @app.route('/api/build_structure', methods=['POST'])
@@ -333,25 +387,27 @@ def build_structure():
 		return jsonify({"error": "Missing structure type"}), 400
 
 	# Cost + class lookup
-	resource_cost = STRUCTURE_REQUIREMENTS.get(structure_type)
-	if not resource_cost:
+	resource_cost_names = STRUCTURE_REQUIREMENTS.get(structure_type)
+	if not resource_cost_names:
 		return jsonify({"error": f"Unknown structure type: {structure_type}"}), 400
 
 	structure_cls = get_structure_class_by_type(structure_type)
 	if not structure_cls:
 		return jsonify({"error": f"No class found for structure: {structure_type}"}), 400
 
-	# Create structure instance (but only *after* validation passes inside BuildAbility)
-	structure_id = f"struct_{uuid.uuid4().hex[:8]}"
-	location_space_id = unit.current_space_id
-	structure_instance = structure_cls(id=structure_id, location_space_id=location_space_id)
+	# Convert resource names to IDs for BuildAbility
+	resource_cost = {}
+	for resource_name, quantity in resource_cost_names.items():
+		resource_id = game_state.find_resource_by_name(resource_name)
+		if resource_id:
+			resource_cost[resource_id] = quantity
 
 	# Perform the build using the unit's BuildAbility
 	result = player.perform_unit_ability(
 		actor_id=unit.id,
 		game_state=game_state,
 		ability="build",
-		structure=structure_instance,
+		structure_type=structure_type,
 		resource_cost=resource_cost
 	)
 
@@ -359,11 +415,11 @@ def build_structure():
 	if isinstance(result, str) and (result.startswith("Cannot build") or result.startswith("Insufficient")):
 		return jsonify({"error": result}), 400
 
-	space = find_space(unit.current_space_id)
+	space = find_space(unit.location_space_id)
 	return jsonify({
 		"result": result,
-		"unit": unit.to_dict(),
-		"space": space.to_dict()
+		"unit": unit.to_dict(game_state=game_state),
+		"space": space.to_dict(game_state=game_state)
 	})
 
 @app.route('/api/advance_time', methods=['POST'])
