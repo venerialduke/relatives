@@ -24,6 +24,7 @@ class GameState:
         self.players: Dict[str,Player] = {}
         self.structures: Dict[str, Structure] = {}
         self.resources: Dict[str, Resource] = {}
+        self.system_wide_accessible_spaces: List[str] = []  # Always accessible spaces
         
 
     def get_space_by_id(self, space_id: str) -> Optional[Space]:
@@ -75,3 +76,15 @@ class GameState:
             (space for space in body.spaces if space.q == target_q and space.r == target_r),
             None
         )
+    
+    def add_system_wide_accessible_space(self, space_id: str):
+        """Add a space that's accessible to all players system-wide"""
+        if space_id not in self.system_wide_accessible_spaces:
+            self.system_wide_accessible_spaces.append(space_id)
+    
+    def get_all_accessible_spaces_for_unit(self, unit: Unit) -> List[str]:
+        """Get all spaces accessible to a unit (unit-explored + system-wide)"""
+        accessible_spaces = set(self.system_wide_accessible_spaces)
+        if hasattr(unit, 'explored_spaces'):
+            accessible_spaces.update(unit.explored_spaces)
+        return list(accessible_spaces)
