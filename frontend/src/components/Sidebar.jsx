@@ -1,8 +1,12 @@
 
-import React from "react";
+import React, { useState } from "react";
 import ResourceList from "./ResourceList";
+import ResourceCollector from "./ResourceCollector";
+import StructureBuilder from "./StructureBuilder";
+import LongDistanceMove from "./LongDistanceMove";
 
-function Sidebar({ system, playerUnits }) {
+function Sidebar({ system, playerUnits, refreshState }) {
+  const [showLongDistanceMove, setShowLongDistanceMove] = useState(false);
   const playerUnit = playerUnits?.[0];
   const currentSpaceId = playerUnit?.location_space_id;
   const unitInventory = playerUnit?.named_inventory;
@@ -23,6 +27,10 @@ function Sidebar({ system, playerUnits }) {
     }
   }
 
+  // Check if player has enough fuel for inter-body movement
+  const currentFuel = unitInventory?.Fuel || 0;
+  const canAffordLongDistance = currentFuel >= 5;
+
   return (
     <div className="sidebar">
       <h2>Info Panel</h2>
@@ -33,6 +41,15 @@ function Sidebar({ system, playerUnits }) {
           <p><strong>Coordinates:</strong> ({currentSpace.q}, {currentSpace.r})</p>
 
           <ResourceList title="Resources on Space" resources={currentSpace.named_inventory} />
+          <ResourceCollector 
+            currentSpace={currentSpace} 
+            playerUnit={playerUnit} 
+            refreshState={refreshState} 
+          />
+          <StructureBuilder 
+            playerUnit={playerUnit} 
+            refreshState={refreshState} 
+          />
           <ResourceList title="Unit Inventory" resources={unitInventory} />
         </>
       ) : (
@@ -40,6 +57,18 @@ function Sidebar({ system, playerUnits }) {
       )}
 
       <hr />
+      
+      <div className="movement-controls">
+        <button 
+          onClick={() => setShowLongDistanceMove(true)}
+          className={`long-distance-button ${canAffordLongDistance ? 'affordable' : 'unaffordable'}`}
+          disabled={!canAffordLongDistance}
+          title={canAffordLongDistance ? 'Travel to other bodies (5 fuel)' : 'Need 5 fuel for inter-body travel'}
+        >
+          Long Distance Move {canAffordLongDistance ? '' : '(Need 5 fuel)'}
+        </button>
+      </div>
+
       <button onClick={() => {
         fetch("/api/advance_time", { method: "POST" })
           .then(res => res.json())
@@ -47,6 +76,16 @@ function Sidebar({ system, playerUnits }) {
       }}>
         Next Turn
       </button>
+
+      <LongDistanceMove
+        playerUnit={playerUnit}
+        isVisible={showLongDistanceMove}
+        onClose={() => setShowLongDistanceMove(false)}
+        onMoveComplete={() => {
+          refreshState();
+          setShowLongDistanceMove(false);
+        }}
+      />
     </div>
   );
 }

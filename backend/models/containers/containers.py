@@ -131,8 +131,8 @@ class Space(Container, InventoryMixin):
 			"r": self.r,
 			"inventory": self.inventory,
 			"body_rel_location": (self.body_rel_q, self.body_rel_r),
-			"buildings": [s.to_dict() for s in self.structures],
-			"units": [u.to_dict() for u in self.units]
+			"buildings": [s.to_dict(game_state) for s in self.structures],
+			"units": [u.to_dict(game_state) for u in self.units]
 		}
 
 		if game_state:
