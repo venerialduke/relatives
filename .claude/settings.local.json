@@ -5,7 +5,9 @@
       "Bash(mv:*)",
       "Bash(python:*)",
       "Bash(npm run lint)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
