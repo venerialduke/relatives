@@ -10,7 +10,7 @@ class PlayerUnit(Unit):
             name="Explorer",  # Or let this be dynamic if you want to pass it in
             location_space_id=location_space_id,
             abilities=[
-                MoveAbility(max_distance=1, body_jump_cost=5, same_body_cost=1, resource_id=FUEL_ID),
+                MoveAbility(max_distance=10, body_jump_cost=5, same_body_cost=1, resource_id=FUEL_ID),
                 CollectAbility(),
                 BuildAbility()
             ]

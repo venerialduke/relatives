@@ -19,7 +19,8 @@ STRUCTURE_REQUIREMENTS = {
     "Factory": {"Algae": 2, "SpaceDust": 3},
     "Settlement": {"Fungus": 4},
     "FuelPump": {"Ore": 2, "Crystal": 1},
-    "Scanner": {"Ore": 1, "Silicon": 1}
+    "Scanner": {"Ore": 1, "Silicon": 1},
+    "SpacePort": {"Silicon": 3, "Crystal": 2, "Ore": 2, "SpaceDust": 1}
 }
 
 # World Generation Configuration
@@ -46,6 +47,7 @@ HEX_DIRECTIONS = [
 # Fuel and Movement Costs
 INTER_BODY_FUEL_COST = 5
 LOCAL_MOVEMENT_FUEL_COST = 1
+SPACE_PORT_TRAVEL_COST = 2  # Space Port to Space Port travel cost
 
 # Starting Inventory Configuration
 def get_starting_inventory_requirements():

@@ -5,7 +5,8 @@ const STRUCTURE_REQUIREMENTS = {
   "Factory": {"Algae": 2, "SpaceDust": 3},
   "Settlement": {"Fungus": 4},
   "FuelPump": {"Ore": 2, "Crystal": 1},
-  "Scanner": {"Ore": 1, "Silicon": 1}
+  "Scanner": {"Ore": 1, "Silicon": 1},
+  "SpacePort": {"Silicon": 3, "Crystal": 2, "Ore": 2, "SpaceDust": 1}
 };
 
 const STRUCTURE_DESCRIPTIONS = {
@@ -13,7 +14,8 @@ const STRUCTURE_DESCRIPTIONS = {
   "Factory": "Processes raw materials into advanced components", 
   "Settlement": "Houses population and provides research bonuses",
   "FuelPump": "Generates 1 fuel per turn for unit movement",
-  "Scanner": "Reveals hidden resources and distant spaces"
+  "Scanner": "Reveals hidden resources and distant spaces",
+  "SpacePort": "Enables reduced-cost travel to other Space Ports (2 fuel vs 5)"
 };
 
 function StructureBuilder({ playerUnit, refreshState }) {

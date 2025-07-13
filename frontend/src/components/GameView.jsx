@@ -72,6 +72,7 @@ function GameView() {
             setZoom={setZoom}
             offset={offset}
             setOffset={setOffset}
+            refreshState={refreshState}
         />
         )}
       </div>

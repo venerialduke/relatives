@@ -149,6 +149,10 @@ export const MovementAPI = {
   async getMovementOptions(unitId) {
     return apiClient.get('/movement_options', { unit_id: unitId });
   },
+
+  async getSpacePortDestinations(unitId) {
+    return apiClient.get(`/space_port_destinations/${unitId}`);
+  },
 };
 
 // Collection API
@@ -182,6 +186,17 @@ export const BuildingAPI = {
 
   async canAffordStructure(unitId, structureType) {
     return apiClient.get(`/can_afford/${unitId}/${structureType}`);
+  },
+};
+
+// Space Port API
+export const SpacePortAPI = {
+  async getAllSpacePorts() {
+    return apiClient.get('/space_ports');
+  },
+
+  async getDestinations(unitId) {
+    return apiClient.get(`/space_port_destinations/${unitId}`);
   },
 };
 
@@ -254,6 +269,7 @@ export default {
   MovementAPI,
   CollectionAPI,
   BuildingAPI,
+  SpacePortAPI,
   TimeAPI,
   APIUtils,
 };

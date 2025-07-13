@@ -8,7 +8,7 @@ from core.game_state import GameState
 from models.entities.entities import Unit
 from models.entities.entity_content import PlayerUnit
 from utils.resource_management import get_named_inventory
-from config.game_config import FUEL_ID, get_starting_inventory_requirements
+from config.game_config import FUEL_ID, get_starting_inventory_requirements, SPACE_PORT_TRAVEL_COST, INTER_BODY_FUEL_COST
 
 def find_resource_id_by_name(game_state: GameState, resource_name: str) -> Optional[str]:
     """
@@ -72,8 +72,8 @@ def generate_space_id(body, rel_q: int, rel_r: int) -> str:
     """Generate a unique space ID based on body and relative coordinates."""
     return f"body:{body.id}:{rel_q}:{rel_r}"
 
-def get_movement_options_for_unit(game_state: GameState, unit_id: str) -> Dict[str, Any]:
-    """Get all available movement options for a unit."""
+def get_movement_destinations_for_unit(game_state: GameState, unit_id: str) -> Dict[str, Any]:
+    """Get all available movement destinations for a unit with unified cost calculation."""
     unit = game_state.get_unit_by_id(unit_id)
     if not unit:
         return {"error": "Unit not found"}
@@ -84,39 +84,100 @@ def get_movement_options_for_unit(game_state: GameState, unit_id: str) -> Dict[s
     if not current_space:
         return {"error": "Current space not found"}
     
-    # Get all bodies except current one
-    current_body_id = current_space.body_id
-    reachable_bodies = []
+    # Import movement calculator (inside function to avoid circular imports)
+    from services.movement_service import MovementCalculator
+    calculator = MovementCalculator(game_state)
     
-    for body in game_state.bodies.values():
-        if body.id == current_body_id:
-            continue  # Skip current body
+    destinations = []
+    accessible_space_ids = game_state.get_all_accessible_spaces_for_unit(unit)
+    
+    # Check all accessible spaces (same body and other bodies)
+    for space_id in accessible_space_ids:
+        if space_id == current_space.id:
+            continue  # Skip current location
             
-        # Get explored spaces on this body (unit-explored + system-wide accessible)
-        explored_spaces = []
-        accessible_space_ids = game_state.get_all_accessible_spaces_for_unit(unit)
+        target_space = game_state.get_space_by_id(space_id)
+        if not target_space:
+            continue
+            
+        # Calculate movement cost and type
+        cost, movement_type, description = calculator.calculate_movement_cost(current_space, target_space)
         
-        for space in body.spaces:
-            if space.id in accessible_space_ids:
-                explored_spaces.append({
-                    "space_id": space.id,
-                    "name": space.name,
-                    "q": space.q,
-                    "r": space.r,
-                    "named_inventory": get_named_inventory(space.inventory, game_state)
-                })
+        # Determine travel icon
+        icon = {
+            "same_body": "🚶",
+            "space_port": "🚀", 
+            "inter_body": "🌍"
+        }.get(movement_type, "🚶")
         
-        # Only include bodies with explored spaces
-        if explored_spaces:
-            reachable_bodies.append({
-                "body_id": body.id,
-                "name": body.name,
-                "fuel_cost": 5,  # Inter-body movement cost
-                "explored_spaces": explored_spaces
-            })
+        # Get body name
+        body = game_state.get_body_by_id(target_space.body_id)
+        body_name = body.name if body else "Unknown Body"
+        
+        destinations.append({
+            "space_id": target_space.id,
+            "space_name": target_space.name,
+            "body_name": body_name,
+            "cost": cost,
+            "movement_type": movement_type,
+            "description": description,
+            "icon": icon,
+            "can_afford": current_fuel >= cost,
+            "is_same_body": target_space.body_id == current_space.body_id
+        })
+    
+    # Sort by cost, then by name
+    destinations.sort(key=lambda d: (d["cost"], d["space_name"]))
     
     return {
-        "reachable_bodies": reachable_bodies,
+        "destinations": destinations,
         "current_fuel": current_fuel,
-        "inter_body_cost": 5
+        "current_space_id": current_space.id
+    }
+
+def calculate_movement_cost_for_unit(game_state: GameState, unit_id: str, target_space_id: str) -> Dict[str, Any]:
+    """Calculate movement cost for a specific destination."""
+    unit = game_state.get_unit_by_id(unit_id)
+    if not unit:
+        return {"error": "Unit not found"}
+    
+    current_space = game_state.get_space_by_id(unit.location_space_id)
+    target_space = game_state.get_space_by_id(target_space_id)
+    
+    if not current_space:
+        return {"error": "Current space not found"}
+    if not target_space:
+        return {"error": "Target space not found"}
+    
+    # Import movement calculator (inside function to avoid circular imports)
+    from services.movement_service import MovementCalculator
+    calculator = MovementCalculator(game_state)
+    
+    cost, movement_type, description = calculator.calculate_movement_cost(current_space, target_space)
+    is_valid, error_msg = calculator.validate_movement(unit, current_space, target_space)
+    
+    current_fuel = unit.inventory.get(FUEL_ID, 0)
+    
+    # Determine travel icon
+    icon = {
+        "same_body": "🚶",
+        "space_port": "🚀", 
+        "inter_body": "🌍"
+    }.get(movement_type, "🚶")
+    
+    # Get body name
+    body = game_state.get_body_by_id(target_space.body_id)
+    body_name = body.name if body else "Unknown Body"
+    
+    return {
+        "cost": cost,
+        "movement_type": movement_type,
+        "description": description,
+        "icon": icon,
+        "body_name": body_name,
+        "can_afford": current_fuel >= cost,
+        "is_valid": is_valid,
+        "error": error_msg,
+        "current_fuel": current_fuel,
+        "remaining_fuel": current_fuel - cost if is_valid else current_fuel
     }

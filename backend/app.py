@@ -17,7 +17,7 @@ from services.building_service import BuildingService
 from services.time_service import TimeService
 
 # Utility imports
-from utils.entity_utils import find_player_units, get_movement_options_for_unit
+from utils.entity_utils import find_player_units, get_movement_destinations_for_unit, calculate_movement_cost_for_unit
 
 # Exception imports
 from exceptions.game_exceptions import (
@@ -123,21 +123,42 @@ def move_unit():
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
-@app.route('/api/movement_options', methods=['GET'])
-def get_movement_options():
-    """Get available movement options for a unit."""
+@app.route('/api/movement_destinations', methods=['GET'])
+def get_movement_destinations():
+    """Get available movement destinations for a unit."""
     unit_id = request.args.get("unit_id")
     
     if not unit_id:
         return jsonify({"error": "Missing unit_id"}), 400
     
     try:
-        options = get_movement_options_for_unit(game_state, unit_id)
-        if "error" in options:
-            return jsonify(options), 400
-        return jsonify(options)
+        destinations = get_movement_destinations_for_unit(game_state, unit_id)
+        if "error" in destinations and destinations["error"] is not None:
+            return jsonify(destinations), 400
+        return jsonify(destinations)
     except Exception as e:
-        return jsonify({"error": f"Failed to get movement options: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to get movement destinations: {str(e)}"}), 500
+
+@app.route('/api/movement_cost', methods=['GET'])
+def get_movement_cost():
+    """Calculate movement cost for a specific destination."""
+    unit_id = request.args.get("unit_id")
+    target_space_id = request.args.get("target_space_id")
+    
+    if not unit_id:
+        return jsonify({"error": "Missing unit_id"}), 400
+    if not target_space_id:
+        return jsonify({"error": "Missing target_space_id"}), 400
+    
+    try:
+        cost_info = calculate_movement_cost_for_unit(game_state, unit_id, target_space_id)
+        
+        if "error" in cost_info and cost_info["error"] is not None:
+            return jsonify(cost_info), 400
+            
+        return jsonify(cost_info)
+    except Exception as e:
+        return jsonify({"error": f"Failed to calculate movement cost: {str(e)}"}), 500
 
 # Collection endpoints
 @app.route('/api/collect_item', methods=['POST'])
@@ -234,6 +255,40 @@ def get_current_time():
         return jsonify({"time": time_service.get_current_time()})
     except Exception as e:
         return jsonify({"error": f"Failed to get time: {str(e)}"}), 500
+
+# Space Port endpoints
+@app.route('/api/space_port_destinations/<unit_id>')
+def get_space_port_destinations(unit_id):
+    """Get Space Port destinations for a unit."""
+    try:
+        unit = game_state.get_unit_by_id(unit_id)
+        if not unit:
+            return jsonify({"error": "Unit not found"}), 404
+        
+        from services.space_port_service import SpacePortService
+        space_port_service = SpacePortService(game_state)
+        destinations = space_port_service.get_space_port_destinations(
+            unit.location_space_id, unit
+        )
+        
+        return jsonify({"destinations": destinations})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/space_ports')
+def get_all_space_ports():
+    """Get information about all Space Ports."""
+    try:
+        from services.space_port_service import SpacePortService
+        space_port_service = SpacePortService(game_state)
+        ports = space_port_service.get_all_space_ports()
+        
+        return jsonify({
+            "space_ports": [port.to_dict(game_state) for port in ports],
+            "total_count": len(ports)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Health check endpoint
 @app.route('/api/health')

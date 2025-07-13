@@ -1,4 +1,5 @@
 from models.entities.entities import Structure
+from models.entities.structures.space_port import SpacePort
 
 class Collector(Structure):
     def __init__(self, id: str, location_space_id: str):
@@ -32,7 +33,8 @@ STRUCTURE_CLS_MAP = {
     "Factory": Factory,
     "Settlement": Settlement,
     "FuelPump": FuelPump,
-    "Scanner": Scanner
+    "Scanner": Scanner,
+    "SpacePort": SpacePort
 }
 
 def get_structure_class_by_type(type_name: str):

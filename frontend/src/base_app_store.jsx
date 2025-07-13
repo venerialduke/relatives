@@ -32,7 +32,6 @@ function App() {
     fetch("/api/system")
       .then((res) => res.json())
       .then((data) => {
-        console.log("System loaded:", data);
         setSystem(data);
       });
 

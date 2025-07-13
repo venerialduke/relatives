@@ -103,18 +103,21 @@ class BuildAbility(Ability):
 		return f"Built {structure_type} on space {current_space.id}."
 
 class MoveAbility(Ability):
-	def __init__(self, max_distance=1, body_jump_cost=5, same_body_cost=1, resource_id=FUEL_ID):
+	def __init__(self, max_distance=10, body_jump_cost=5, same_body_cost=1, resource_id=FUEL_ID):
 		super().__init__("move", "moves the entity")
 		self.max_distance = max_distance
 		self.body_jump_cost = body_jump_cost
 		self.same_body_cost = same_body_cost
 		self.resource_id = resource_id
 
-	def evaluate_move(self, entity, from_space, to_space) -> Tuple[bool, Optional[int], Optional[str]]:
+	def evaluate_move(self, entity, from_space, to_space, override_cost=None) -> Tuple[bool, Optional[int], Optional[str]]:
 		"""
 		Returns: (can_move: bool, cost: int or None, error: str or None)
+		override_cost: If provided, use this cost instead of calculating it
 		"""
-		if from_space.body_id == to_space.body_id:
+		if override_cost is not None:
+			cost = override_cost
+		elif from_space.body_id == to_space.body_id:
 			distance = space_distance(from_space, to_space)
 			if distance > self.max_distance:
 				return False, None, "Target too far"
@@ -132,8 +135,8 @@ class MoveAbility(Ability):
 
 		return True, cost, None
 
-	def execute_move(self, entity, from_space, to_space) -> Optional[str]:
-		can_move, cost, error = self.evaluate_move(entity, from_space, to_space)
+	def execute_move(self, entity, from_space, to_space, override_cost=None) -> Optional[str]:
+		can_move, cost, error = self.evaluate_move(entity, from_space, to_space, override_cost)
 		if not can_move:
 			return error
 
@@ -149,6 +152,7 @@ class MoveAbility(Ability):
 	def perform(self, actor, game_state, **kwargs):
 		from_space_id = actor.location_space_id
 		to_space_id = kwargs.get("space_id")
+		override_cost = kwargs.get("fuel_cost")  # Allow movement service to specify exact cost
 
 		if not to_space_id:
 			return "No destination specified"
@@ -159,5 +163,5 @@ class MoveAbility(Ability):
 		if not from_space or not to_space:
 			return "Invalid space(s)"
 
-		error = self.execute_move(actor, from_space, to_space)
+		error = self.execute_move(actor, from_space, to_space, override_cost)
 		return None if error is None else error

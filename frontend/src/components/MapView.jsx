@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { axialToPixel, drawHex, DIRECTION_ANGLES } from "./helpers";
 import ResourceHighlighter from "./ResourceHighlighter";
+import MovementDialog from "./MovementDialog";
 
 // Helper functions for structure visualization
 const getStructureColor = (structureName) => {
@@ -43,16 +44,16 @@ const generateStarField = (count, width, height) => {
 };
 
 
-function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, setOffset }) {
-
-  if (!offset || zoom === undefined) {
-    return null; // or a loading placeholder if you prefer
-  }
+function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, setOffset, refreshState }) {
   const svgRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [selectedResource, setSelectedResource] = useState(null);
   const [highlighterVisible, setHighlighterVisible] = useState(false);
+  const [movementDialog, setMovementDialog] = useState({
+    isVisible: false,
+    targetSpace: null
+  });
   const [starFields] = useState(() => ({
     distant: generateStarField(100, 4000, 4000),
     medium: generateStarField(200, 3000, 3000), 
@@ -65,21 +66,6 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     return `/images/hubble/hubble_${imageNumber}.png`;
   });
 
-  // Get player's explored spaces and system-wide accessible spaces
-  const playerUnit = playerUnits?.[0];
-  const unitExploredSpaces = new Set(playerUnit?.explored_spaces || []);
-  
-  // System-wide accessible spaces (first space of each body)
-  const systemAccessibleSpaces = new Set();
-  system?.bodies?.forEach(body => {
-    if (body.spaces && body.spaces.length > 0) {
-      systemAccessibleSpaces.add(body.spaces[0].id); // First space is always accessible
-    }
-  });
-  
-  // Combined for resource highlighting (existing functionality)
-  const exploredSpaces = new Set([...unitExploredSpaces, ...systemAccessibleSpaces]);
-
   // Animation loop for twinkling stars
   useEffect(() => {
     const animate = () => {
@@ -90,9 +76,7 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     return () => cancelAnimationFrame(animationId);
   }, []);
 
-  // --- Handle zoom via mouse scroll ---
-
-
+  // Handle zoom via mouse scroll
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -128,6 +112,61 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
 
     return () => svg.removeEventListener("wheel", handleWheel);
   }, [zoom, offset, setZoom, setOffset]);
+
+  if (!offset || zoom === undefined) {
+    return null; // or a loading placeholder if you prefer
+  }
+
+  // Get player's explored spaces and system-wide accessible spaces
+  const playerUnit = playerUnits?.[0];
+  const unitExploredSpaces = new Set(playerUnit?.explored_spaces || []);
+  
+  // System-wide accessible spaces (first space of each body)
+  const systemAccessibleSpaces = new Set();
+  system?.bodies?.forEach(body => {
+    if (body.spaces && body.spaces.length > 0) {
+      systemAccessibleSpaces.add(body.spaces[0].id); // First space is always accessible
+    }
+  });
+  
+  // Combined for resource highlighting (existing functionality)
+  const exploredSpaces = new Set([...unitExploredSpaces, ...systemAccessibleSpaces]);
+
+
+  // Handle space click for movement
+  const handleSpaceClick = async (space, event) => {
+    // Only handle right-click or shift+click
+    if (event.type === 'contextmenu' || (event.type === 'click' && event.shiftKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const playerUnit = playerUnits?.[0];
+      if (!playerUnit) return;
+      
+      // Don't allow movement to current space
+      if (space.id === playerUnit.location_space_id) return;
+      
+      // Only allow movement to explored spaces
+      if (!exploredSpaces.has(space.id)) return;
+      
+      // Open movement dialog for this specific target
+      setMovementDialog({
+        isVisible: true,
+        targetSpace: space
+      });
+    }
+  };
+
+  // Handle movement completion
+  const handleMovementComplete = () => {
+    if (refreshState) refreshState();
+  };
+
+  // Handle movement dialog close
+  const handleMovementDialogClose = () => {
+    setMovementDialog({ isVisible: false, targetSpace: null });
+  };
+
 
   // --- Handle right-click drag ---
   const handleMouseDown = (e) => {
@@ -182,7 +221,6 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
   const generateRingOutline = (centerQ, centerR, ring) => {
     // Validate inputs
     if (isNaN(centerQ) || isNaN(centerR) || isNaN(ring)) {
-      console.warn('Invalid coordinates for ring outline:', centerQ, centerR, ring);
       return [];
     }
     
@@ -190,7 +228,6 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     
     // Validate pixel coordinates
     if (isNaN(centerX) || isNaN(centerY)) {
-      console.warn('Invalid pixel coordinates:', centerX, centerY);
       return [];
     }
     
@@ -227,16 +264,6 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     const spaceCount = body.spaces.length;
     const ring = calculateRingNumber(spaceCount);
     
-    // Debug ring calculation for Planet 4
-    if (body.name === 'Planet 4') {
-      console.log(`Planet 4 debug: ${spaceCount} spaces, calculated ring: ${ring}`);
-      // Test what the actual ring should be
-      for (let testRing = 0; testRing <= 5; testRing++) {
-        const totalHexes = 1 + 3 * testRing * (testRing + 1);
-        console.log(`Ring ${testRing}: total hexes = ${totalHexes}`);
-      }
-    }
-    
     // Use the body's center position directly (body.q, body.r)
     // The ring outline should be centered on the body, not relative coordinates
     const centerQ = body.q;
@@ -244,7 +271,6 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     
     // Validate body coordinates
     if (isNaN(centerQ) || isNaN(centerR)) {
-      console.warn('Invalid body coordinates for', body.name, ':', centerQ, centerR);
       return '';
     }
     
@@ -419,6 +445,11 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
                       stroke={strokeColor}
                       strokeWidth={strokeWidth}
                       opacity={opacity}
+                      style={{ 
+                        cursor: exploredSpaces.has(space.id) && !isPlayerUnitHere ? 'pointer' : 'default' 
+                      }}
+                      onClick={(e) => handleSpaceClick(space, e)}
+                      onContextMenu={(e) => handleSpaceClick(space, e)}
                     />
 
                     {/* Show structures on this space (only if explored) */}
@@ -475,6 +506,14 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
       onResourceSelect={setSelectedResource}
       isVisible={highlighterVisible}
       onToggleVisibility={() => setHighlighterVisible(!highlighterVisible)}
+    />
+
+    <MovementDialog
+      isVisible={movementDialog.isVisible}
+      targetSpace={movementDialog.targetSpace}
+      playerUnit={playerUnits?.[0]}
+      onClose={handleMovementDialogClose}
+      onMoveComplete={handleMovementComplete}
     />
   </div>
   );

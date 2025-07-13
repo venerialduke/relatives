@@ -164,6 +164,9 @@ class WorldBuilder:
                 # Make the first space of each body system-wide accessible
                 if i == 0:  # First space (center space)
                     self.game_state.add_system_wide_accessible_space(space.id)
+                    
+                    # Add a Space Port to the first space of each body for testing
+                    self._create_space_port_at_space(space_id, body_index)
 
             system.bodies.append(body)
 
@@ -196,3 +199,21 @@ class WorldBuilder:
         )
         
         return system, player, player_unit
+    
+    def _create_space_port_at_space(self, space_id: str, body_index: int):
+        """Create a Space Port at the specified space for testing purposes."""
+        from models.entities.structures.space_port import SpacePort
+        import uuid
+        
+        space_port = SpacePort(
+            id=f"test_port_{body_index + 1}",
+            location_space_id=space_id
+        )
+        
+        # Register the Space Port in game state
+        self.game_state.structures[space_port.id] = space_port
+        
+        # Add the Space Port to the space's structures list
+        space = self.game_state.get_space_by_id(space_id)
+        if space:
+            space.structures.append(space_port)
