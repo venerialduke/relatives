@@ -5,10 +5,9 @@ from models.abilities.base import Ability
 from models.entities.base import Actor  
 from typing import List, Dict
 from utils.resource_management import InventoryMixin, get_named_inventory
+from config.game_config import FUEL_ID
 
 from enum import IntEnum
-
-FUEL_ID = 'fuel'
 
 class HexDirection(IntEnum):
     E = 0       # (1, 0)
