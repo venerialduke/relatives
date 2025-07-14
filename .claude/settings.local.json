@@ -5,7 +5,18 @@
       "Bash(mv:*)",
       "Bash(python:*)",
       "Bash(npm run lint)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(echo)",
+      "Bash(npm run dev:*)",
+      "Bash(pip install:*)",
+      "Bash(echo:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

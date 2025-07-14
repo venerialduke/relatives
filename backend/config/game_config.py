@@ -76,3 +76,37 @@ GAME_BALANCE = {
     "fuel_pump_generation_rate": 1,  # Per time tick
     "max_resources_per_space": 4,
 }
+
+# Unit Build Costs Configuration
+UNIT_BUILD_COSTS = {
+    "mining_drone": {
+        "iron": 10,
+        "fuel": 5
+    }
+}
+
+# Mining Drone Configuration
+MINING_DRONE_CONFIG = {
+    "default_lifespan": 30,
+    "default_cargo_capacity": 10,
+    "fuel_consumption_per_move": 1,
+    "fuel_per_collection": 0,  # No fuel cost for collecting
+    "default_target_resource": "iron",
+    "search_radius": 15,
+    "collection_efficiency": 1  # Resources collected per turn
+}
+
+# Collection Structures Configuration
+COLLECTION_STRUCTURES = [
+    "Factory",
+    "SpacePort",
+    "Collector"  # Future: when Collector gets collection capabilities
+]
+
+# Autonomous Unit Configuration
+AUTONOMOUS_UNIT_CONFIG = {
+    "max_autonomous_units_per_player": 50,
+    "expiration_cleanup_threshold": 5,  # Remove units with lifespan <= this
+    "ai_processing_enabled": True,
+    "ai_error_tolerance": 3  # Max AI errors before unit is disabled
+}

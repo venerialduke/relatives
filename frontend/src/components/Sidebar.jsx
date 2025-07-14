@@ -3,8 +3,10 @@ import React, { useState } from "react";
 import ResourceList from "./ResourceList";
 import ResourceCollector from "./ResourceCollector";
 import StructureBuilder from "./StructureBuilder";
+import UnitManager from "./UnitManager";
 
 function Sidebar({ system, playerUnits, refreshState }) {
+  const [unitManagerVisible, setUnitManagerVisible] = useState(false);
   const playerUnit = playerUnits?.[0];
   const currentSpaceId = playerUnit?.location_space_id;
   const unitInventory = playerUnit?.named_inventory;
@@ -68,6 +70,28 @@ function Sidebar({ system, playerUnits, refreshState }) {
       }}>
         Next Turn
       </button>
+
+      <button 
+        onClick={() => setUnitManagerVisible(true)}
+        className="autonomous-unit-manager-btn"
+        style={{
+          marginTop: '10px',
+          backgroundColor: '#9C27B0',
+          color: 'white',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}
+      >
+        🤖 Manage Autonomous Units
+      </button>
+
+      <UnitManager
+        isVisible={unitManagerVisible}
+        onClose={() => setUnitManagerVisible(false)}
+        refreshState={refreshState}
+      />
 
     </div>
   );

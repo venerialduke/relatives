@@ -15,6 +15,7 @@ from services.movement_service import MovementService
 from services.collection_service import CollectionService
 from services.building_service import BuildingService
 from services.time_service import TimeService
+from services.unit_factory_service import UnitFactoryService
 
 # Utility imports
 from utils.entity_utils import find_player_units, get_movement_destinations_for_unit, calculate_movement_cost_for_unit
@@ -39,6 +40,7 @@ movement_service = MovementService(game_state)
 collection_service = CollectionService(game_state)
 building_service = BuildingService(game_state)
 time_service = TimeService(game_state)
+unit_factory_service = UnitFactoryService(game_state)
 
 # Build the default world
 system, player, player_unit = world_builder.build_default_world()
@@ -161,6 +163,62 @@ def get_movement_cost():
         return jsonify({"error": f"Failed to calculate movement cost: {str(e)}"}), 500
 
 # Collection endpoints
+@app.route('/api/deposit_resource', methods=['POST'])
+def deposit_resource():
+    """Deposit resources from unit to structure."""
+    try:
+        data = request.json
+        unit_id = data.get("unit_id")
+        structure_id = data.get("structure_id")
+        resource_id = data.get("resource_id")
+        quantity = data.get("quantity", 1)
+
+        if not all([unit_id, structure_id, resource_id]):
+            return jsonify({"error": "Missing required parameters"}), 400
+
+        # Get unit and structure
+        unit = game_state.get_unit_by_id(unit_id)
+        structure = game_state.get_structure_by_id(structure_id)
+
+        if not unit:
+            return jsonify({"error": f"Unit {unit_id} not found"}), 404
+        if not structure:
+            return jsonify({"error": f"Structure {structure_id} not found"}), 404
+
+        # Check if structure accepts deposits (has CollectionStructure trait)
+        from models.entities.traits import CollectionStructure
+        if not isinstance(structure, CollectionStructure):
+            return jsonify({"error": f"Structure {structure.name} cannot accept deposits"}), 400
+
+        # Check if unit has the resource
+        available = unit.inventory.get(resource_id, 0)
+        if available < quantity:
+            return jsonify({"error": f"Unit only has {available} {resource_id}, cannot deposit {quantity}"}), 400
+
+        # Check if unit is at structure location
+        if unit.location_space_id != structure.location_space_id:
+            return jsonify({"error": "Unit must be at structure location to deposit resources"}), 400
+
+        # Perform the deposit
+        unit.inventory[resource_id] -= quantity
+        if unit.inventory[resource_id] <= 0:
+            del unit.inventory[resource_id]
+
+        # Add to structure inventory
+        if resource_id not in structure.inventory:
+            structure.inventory[resource_id] = 0
+        structure.inventory[resource_id] += quantity
+
+        return jsonify({
+            "success": True,
+            "message": f"Deposited {quantity} {resource_id} to {structure.name}",
+            "unit_inventory": unit.inventory,
+            "structure_inventory": structure.inventory
+        })
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to deposit resource: {str(e)}"}), 500
+
 @app.route('/api/collect_item', methods=['POST'])
 def collect_item():
     """Collect resources from spaces or structures."""
@@ -289,6 +347,88 @@ def get_all_space_ports():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Unit Building endpoints
+@app.route('/api/build_unit', methods=['POST'])
+def build_unit():
+    """Build a unit at a factory."""
+    try:
+        data = request.json
+        factory_id = data.get("factory_id")
+        unit_type = data.get("unit_type", "mining_drone")
+        target_resource = data.get("target_resource", "iron")
+        unit_id = data.get("unit_id")  # Optional custom ID
+
+        if not factory_id:
+            return jsonify({"error": "Missing factory_id"}), 400
+
+        if unit_type == "mining_drone":
+            result = unit_factory_service.build_mining_drone(
+                factory_id=factory_id,
+                target_resource=target_resource,
+                drone_id=unit_id
+            )
+        else:
+            return jsonify({"error": f"Unknown unit type: {unit_type}"}), 400
+
+        if result["success"]:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to build unit: {str(e)}"}), 500
+
+@app.route('/api/unit_build_costs/<unit_type>')
+def get_unit_build_costs(unit_type):
+    """Get build costs for a specific unit type."""
+    try:
+        costs = unit_factory_service.get_unit_build_costs(unit_type)
+        return jsonify(costs)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get build costs: {str(e)}"}), 500
+
+@app.route('/api/factory_status/<factory_id>')
+def get_factory_status(factory_id):
+    """Get detailed status of a factory including build capabilities."""
+    try:
+        status = unit_factory_service.get_factory_status(factory_id)
+        
+        if "error" in status:
+            return jsonify(status), 404
+        
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get factory status: {str(e)}"}), 500
+
+@app.route('/api/autonomous_units')
+def get_autonomous_units():
+    """Get statistics about autonomous units."""
+    try:
+        stats = time_service.get_autonomous_unit_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get autonomous unit stats: {str(e)}"}), 500
+
+@app.route('/api/factories')
+def get_all_factories():
+    """Get information about all factories."""
+    try:
+        from models.entities.structure_map import Factory
+        
+        factories = []
+        for structure_id, structure in game_state.structures.items():
+            if isinstance(structure, Factory):
+                factory_status = unit_factory_service.get_factory_status(structure_id)
+                if "error" not in factory_status:
+                    factories.append(factory_status)
+        
+        return jsonify({
+            "factories": factories,
+            "total_count": len(factories)
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to get factories: {str(e)}"}), 500
 
 # Health check endpoint
 @app.route('/api/health')

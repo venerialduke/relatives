@@ -5,9 +5,10 @@ Enables reduced-cost inter-body travel following existing structure patterns.
 
 from typing import Dict, Any, Optional
 from models.entities.entities import Structure
+from models.entities.traits import CollectionStructure
 from config.game_config import SPACE_PORT_TRAVEL_COST
 
-class SpacePort(Structure):
+class SpacePort(Structure, CollectionStructure):
     """
     Space Port structure enabling reduced-cost inter-body travel.
     Simple implementation following existing structure patterns.
