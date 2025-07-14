@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { axialToPixel, drawHex, DIRECTION_ANGLES } from "./helpers";
 import ResourceHighlighter from "./ResourceHighlighter";
 import MovementDialog from "./MovementDialog";
+import StructureInteraction from "./StructureInteraction";
+import SpaceInfoPanel from "./SpaceInfoPanel";
 
 // Helper functions for structure visualization
 const getStructureColor = (structureName) => {
@@ -21,9 +23,44 @@ const getStructureSymbol = (structureName) => {
     "Collector": "C", 
     "Factory": "M",
     "Settlement": "S",
-    "Scanner": "R"
+    "Scanner": "R",
+    "Space Port": "P"
   };
   return symbols[structureName] || "?";
+};
+
+// Helper functions for autonomous unit visualization
+const getAutonomousUnitColor = (unitType, state) => {
+  const colors = {
+    mining_drone: {
+      search: "#FFA500",     // Orange when searching
+      collect: "#32CD32",    // Lime green when collecting
+      deposit: "#4169E1",    // Royal blue when depositing
+      returning: "#FFD700",  // Gold when returning
+      idle: "#808080",       // Gray when idle
+      expired: "#FF6B6B"     // Red when expired
+    }
+  };
+  return colors[unitType]?.[state] || "#808080";
+};
+
+const getAutonomousUnitSymbol = (unitType) => {
+  const symbols = {
+    mining_drone: "D"
+  };
+  return symbols[unitType] || "A";
+};
+
+const getStateIndicator = (state) => {
+  const indicators = {
+    search: "🔍",
+    collect: "⛏️", 
+    deposit: "📦",
+    returning: "↩️",
+    idle: "⏸️",
+    expired: "💀"
+  };
+  return indicators[state] || "❓";
 };
 
 // Generate star field data
@@ -44,10 +81,18 @@ const generateStarField = (count, width, height) => {
 };
 
 
-function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, setOffset, refreshState }) {
+function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, setOffset, refreshState, autonomousUnits, factories }) {
   const svgRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  // autonomousUnits now passed as props from GameView
+  const [structureDialog, setStructureDialog] = useState({ isVisible: false, structure: null });
+  const [spaceInfoPanel, setSpaceInfoPanel] = useState({ isVisible: false, space: null });
+  
+  // Debug state changes (only log when state actually changes)
+  useEffect(() => {
+    console.log('📊 SpaceInfoPanel state changed:', spaceInfoPanel);
+  }, [spaceInfoPanel.isVisible]);
   const [selectedResource, setSelectedResource] = useState(null);
   const [highlighterVisible, setHighlighterVisible] = useState(false);
   const [movementDialog, setMovementDialog] = useState({
@@ -75,6 +120,27 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
     const animationId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationId);
   }, []);
+
+  // autonomousUnits data is now managed by GameView and passed as props
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        // Close any open panels/dialogs
+        if (spaceInfoPanel.isVisible) {
+          handleSpaceInfoPanelClose();
+        } else if (structureDialog.isVisible) {
+          handleStructureDialogClose();
+        } else if (movementDialog.isVisible) {
+          handleMovementDialogClose();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [spaceInfoPanel.isVisible, structureDialog.isVisible, movementDialog.isVisible]);
 
   // Handle zoom via mouse scroll
   useEffect(() => {
@@ -133,12 +199,38 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
   const exploredSpaces = new Set([...unitExploredSpaces, ...systemAccessibleSpaces]);
 
 
-  // Handle space click for movement
-  const handleSpaceClick = async (space, event) => {
-    // Only handle right-click or shift+click
-    if (event.type === 'contextmenu' || (event.type === 'click' && event.shiftKey)) {
-      event.preventDefault();
-      event.stopPropagation();
+  // Space click handling is now in handleSpaceInfoClick
+
+  // Handle movement completion
+  const handleMovementComplete = () => {
+    if (refreshState) refreshState();
+  };
+
+  // Handle movement dialog close
+  const handleMovementDialogClose = () => {
+    setMovementDialog({ isVisible: false, targetSpace: null });
+  };
+
+  const handleStructureClick = (structure, e) => {
+    console.log('🏭 Structure clicked:', structure.name, structure.id, 'at space:', structure.location_space_id);
+    e.stopPropagation();
+    setStructureDialog({ isVisible: true, structure });
+  };
+
+  const handleStructureDialogClose = () => {
+    setStructureDialog({ isVisible: false, structure: null });
+  };
+
+  const handleSpaceInfoClick = (space, e) => {
+    console.log('🌌 Space clicked for info:', space.id);
+    console.log('   Event type:', e.type, 'Shift key:', e.shiftKey);
+    console.log('   Buildings:', space.buildings?.length || 0);
+    
+    // Handle different click types
+    if (e.type === 'contextmenu' || (e.type === 'click' && e.shiftKey)) {
+      // Right-click or Shift+click: Movement (existing functionality)
+      e.preventDefault();
+      e.stopPropagation();
       
       const playerUnit = playerUnits?.[0];
       if (!playerUnit) return;
@@ -154,17 +246,24 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
         isVisible: true,
         targetSpace: space
       });
+    } else {
+      // Any other click: Space info panel (simplified condition)
+      console.log('📋 Processing regular click for space info panel');
+      e.stopPropagation();
+      
+      // Close other dialogs
+      setStructureDialog({ isVisible: false, structure: null });
+      setMovementDialog({ isVisible: false, targetSpace: null });
+      
+      // Open space info panel
+      console.log('📋 Opening space info panel for clicked space:', space.id);
+      setSpaceInfoPanel({ isVisible: true, space });
     }
   };
 
-  // Handle movement completion
-  const handleMovementComplete = () => {
-    if (refreshState) refreshState();
-  };
-
-  // Handle movement dialog close
-  const handleMovementDialogClose = () => {
-    setMovementDialog({ isVisible: false, targetSpace: null });
+  const handleSpaceInfoPanelClose = () => {
+    console.log('📋 Space info panel closed');
+    setSpaceInfoPanel({ isVisible: false, space: null });
   };
 
 
@@ -328,6 +427,59 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      {/* Debug Button */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('🧪 Debug: Test button clicked');
+          
+          // Find player's current space
+          const playerUnit = playerUnits?.[0];
+          if (!playerUnit) {
+            console.log('🧪 Debug: No player unit found');
+            return;
+          }
+          
+          console.log('🧪 Debug: Player unit at space:', playerUnit.space_id || playerUnit.location_space_id);
+          
+          // Find the space in the system
+          let currentSpace = null;
+          if (system?.bodies) {
+            for (const body of system.bodies) {
+              const foundSpace = body.spaces?.find(s => 
+                s.id === (playerUnit.space_id || playerUnit.location_space_id)
+              );
+              if (foundSpace) {
+                currentSpace = foundSpace;
+                break;
+              }
+            }
+          }
+          
+          if (currentSpace) {
+            console.log('🧪 Debug: Opening panel for player\'s current space:', currentSpace.id);
+            setSpaceInfoPanel({ isVisible: true, space: currentSpace });
+          } else {
+            console.log('🧪 Debug: Could not find player\'s current space in system');
+          }
+        }}
+        style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          zIndex: 50,
+          padding: '5px 10px',
+          backgroundColor: '#4f46e5',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}
+      >
+        Current Space Info
+      </button>
+
       <svg
         ref={svgRef}
         width="100%"
@@ -448,8 +600,8 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
                       style={{ 
                         cursor: exploredSpaces.has(space.id) && !isPlayerUnitHere ? 'pointer' : 'default' 
                       }}
-                      onClick={(e) => handleSpaceClick(space, e)}
-                      onContextMenu={(e) => handleSpaceClick(space, e)}
+                      onClick={(e) => handleSpaceInfoClick(space, e)}
+                      onContextMenu={(e) => handleSpaceInfoClick(space, e)}
                     />
 
                     {/* Show structures on this space (only if explored) */}
@@ -467,6 +619,13 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
                             stroke="#000"
                             strokeWidth="1"
                             opacity="0.9"
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => {
+                              console.log('🏭 Structure clicked - redirecting to space click:', structure.name);
+                              e.stopPropagation();
+                              // Find the space this structure belongs to and trigger space click
+                              handleSpaceInfoClick(space, e);
+                            }}
                           />
                           <text
                             x="0"
@@ -475,6 +634,7 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
                             fill="white"
                             fontSize="8"
                             fontWeight="bold"
+                            style={{ cursor: 'pointer', pointerEvents: 'none' }}
                           >
                             {getStructureSymbol(structure.name)}
                           </text>
@@ -482,6 +642,65 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
                       );
                     })}
 
+                    {/* Show autonomous units on this space */}
+                    {autonomousUnits
+                      .filter(unit => unit.location_space_id === space.id)
+                      .map((unit, index) => {
+                        // Position autonomous units offset from center to avoid overlap with player units
+                        const offsetX = (index - (autonomousUnits.filter(u => u.location_space_id === space.id).length - 1) / 2) * 8;
+                        const offsetY = isPlayerUnitHere ? 12 : -8; // Move down if player unit is here
+                        const unitColor = getAutonomousUnitColor(unit.unit_type || 'mining_drone', unit.state);
+                        const symbol = getAutonomousUnitSymbol(unit.unit_type || 'mining_drone');
+                        
+                        return (
+                          <g key={unit.id} transform={`translate(${sx + offsetX}, ${sy + offsetY})`}>
+                            {/* Unit body */}
+                            <circle
+                              cx="0"
+                              cy="0"
+                              r="5"
+                              fill={unitColor}
+                              stroke="#000"
+                              strokeWidth="1"
+                              opacity="0.9"
+                            />
+                            {/* Unit symbol */}
+                            <text
+                              x="0"
+                              y="2"
+                              textAnchor="middle"
+                              fill="white"
+                              fontSize="6"
+                              fontWeight="bold"
+                            >
+                              {symbol}
+                            </text>
+                            {/* State indicator */}
+                            <text
+                              x="0"
+                              y="-8"
+                              textAnchor="middle"
+                              fontSize="8"
+                              title={`${unit.id}: ${unit.state} (${unit.lifespan} turns left)`}
+                            >
+                              {getStateIndicator(unit.state)}
+                            </text>
+                            {/* Lifespan indicator */}
+                            {unit.lifespan <= 5 && (
+                              <circle
+                                cx="6"
+                                cy="-6"
+                                r="2"
+                                fill="#FF6B6B"
+                                stroke="#FFF"
+                                strokeWidth="0.5"
+                                title={`Low lifespan: ${unit.lifespan} turns`}
+                              />
+                            )}
+                          </g>
+                        );
+                      })}
+                      
                     {isPlayerUnitHere && (
                       <g transform={`translate(${sx}, ${sy}) rotate(${DIRECTION_ANGLES[direction] + 90} 0 0)`}>
                         <polygon
@@ -515,6 +734,41 @@ function MapView({ system, playerUnits, unitDirection, zoom, setZoom, offset, se
       onClose={handleMovementDialogClose}
       onMoveComplete={handleMovementComplete}
     />
+
+    {structureDialog.isVisible && (
+      <StructureInteraction
+        structure={structureDialog.structure}
+        onClose={handleStructureDialogClose}
+        refreshState={refreshState}
+        playerUnits={playerUnits}
+      />
+    )}
+
+    {/* Debug: Panel visibility indicator */}
+    {spaceInfoPanel.isVisible && (
+      <div style={{
+        position: 'fixed',
+        top: '50px',
+        left: '10px',
+        zIndex: 100,
+        padding: '5px',
+        backgroundColor: 'red',
+        color: 'white',
+        fontSize: '12px'
+      }}>
+        Panel should be visible for: {spaceInfoPanel.space?.id || 'unknown'}
+      </div>
+    )}
+
+    {spaceInfoPanel.isVisible && (
+      <SpaceInfoPanel
+        space={spaceInfoPanel.space}
+        system={system}
+        playerUnits={playerUnits}
+        onClose={handleSpaceInfoPanelClose}
+        refreshState={refreshState}
+      />
+    )}
   </div>
   );
 }

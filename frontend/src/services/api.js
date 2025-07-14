@@ -211,6 +211,62 @@ export const TimeAPI = {
   },
 };
 
+// Autonomous Unit API
+export const AutonomousUnitAPI = {
+  async getUnitStatistics() {
+    return apiClient.get('/autonomous_units');
+  },
+
+  async getAllUnits() {
+    const gameState = await apiClient.get('/game_state');
+    return Object.values(gameState.autonomous_units || {});
+  },
+
+  async dismissUnit(unitId) {
+    // Future implementation when backend supports it
+    throw new APIError('Unit dismissal not yet implemented', 501);
+  },
+
+  async recallUnit(unitId) {
+    // Future implementation when backend supports it  
+    throw new APIError('Unit recall not yet implemented', 501);
+  },
+
+  async reprogramUnit(unitId, newTargetResource) {
+    // Future implementation when backend supports it
+    throw new APIError('Unit reprogramming not yet implemented', 501);
+  },
+};
+
+// Factory API
+export const FactoryAPI = {
+  async getFactoryStatus(factoryId) {
+    return apiClient.get(`/factory_status/${factoryId}`);
+  },
+
+  async getAllFactories() {
+    return apiClient.get('/factories');
+  },
+
+  async buildUnit(factoryId, unitType = 'mining_drone', targetResource = 'iron', unitId = null) {
+    const data = {
+      factory_id: factoryId,
+      unit_type: unitType,
+      target_resource: targetResource,
+    };
+    
+    if (unitId) {
+      data.unit_id = unitId;
+    }
+    
+    return apiClient.post('/build_unit', data);
+  },
+
+  async getUnitBuildCosts(unitType) {
+    return apiClient.get(`/unit_build_costs/${unitType}`);
+  },
+};
+
 // Utility functions for common patterns
 export const APIUtils = {
   // Handle API errors with user-friendly messages
@@ -271,5 +327,7 @@ export default {
   BuildingAPI,
   SpacePortAPI,
   TimeAPI,
+  AutonomousUnitAPI,
+  FactoryAPI,
   APIUtils,
 };

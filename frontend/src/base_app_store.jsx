@@ -27,6 +27,9 @@ function App() {
   const [playerUnitSpaces, setPlayerUnitSpaces] = useState([]);
   const [playerUnits, setPlayerUnits] = useState([]);
   const [unitDirection, setUnitDirection] = useState(0);  // <-- NEW
+  const [autonomousUnits, setAutonomousUnits] = useState([]);
+  const [autonomousUnitStats, setAutonomousUnitStats] = useState(null);
+  const [factories, setFactories] = useState([]);
 
   useEffect(() => {
     fetch("/api/system")
@@ -46,6 +49,84 @@ function App() {
         }
       });
   }, []);
+
+  // Fetch autonomous units and factories
+  useEffect(() => {
+    const fetchAutonomousData = async () => {
+      try {
+        // Fetch autonomous unit statistics
+        const statsResponse = await fetch('/api/autonomous_units');
+        if (statsResponse.ok) {
+          const stats = await statsResponse.json();
+          setAutonomousUnitStats(stats);
+        }
+
+        // Fetch actual autonomous units from game state
+        const gameStateResponse = await fetch('/api/game_state');
+        if (gameStateResponse.ok) {
+          const gameState = await gameStateResponse.json();
+          const units = Object.values(gameState.autonomous_units || {});
+          setAutonomousUnits(units);
+        }
+
+        // Fetch factories
+        const factoriesResponse = await fetch('/api/factories');
+        if (factoriesResponse.ok) {
+          const factoriesData = await factoriesResponse.json();
+          setFactories(factoriesData.factories || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch autonomous data:', error);
+      }
+    };
+
+    fetchAutonomousData();
+    
+    // Refresh autonomous data every 10 seconds
+    const interval = setInterval(fetchAutonomousData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh function for components to trigger updates
+  const refreshState = async () => {
+    try {
+      // Refresh player units
+      const playerResponse = await fetch("/api/player_units/player_1");
+      if (playerResponse.ok) {
+        const data = await playerResponse.json();
+        setPlayerUnits(data);
+        const spaceIds = data.map((u) => u.space_id);
+        setPlayerUnitSpaces(spaceIds);
+        if (data.length > 0) {
+          setUnitDirection(data[0].direction ?? 0);
+        }
+      }
+
+      // Refresh autonomous units
+      const gameStateResponse = await fetch('/api/game_state');
+      if (gameStateResponse.ok) {
+        const gameState = await gameStateResponse.json();
+        const units = Object.values(gameState.autonomous_units || {});
+        setAutonomousUnits(units);
+      }
+
+      // Refresh autonomous unit statistics
+      const statsResponse = await fetch('/api/autonomous_units');
+      if (statsResponse.ok) {
+        const stats = await statsResponse.json();
+        setAutonomousUnitStats(stats);
+      }
+
+      // Refresh factories
+      const factoriesResponse = await fetch('/api/factories');
+      if (factoriesResponse.ok) {
+        const factoriesData = await factoriesResponse.json();
+        setFactories(factoriesData.factories || []);
+      }
+    } catch (error) {
+      console.error('Failed to refresh state:', error);
+    }
+  };
 
   // ✅ This is now a separate effect, and legal!
   useEffect(() => {
@@ -70,17 +151,8 @@ function App() {
             return res.json();
           })
           .then((updatedUnit) => {
-            // Refresh unit state from API
-            return fetch("/api/player_units/player_1")
-              .then((res) => res.json())
-              .then((units) => {
-                setPlayerUnits(units);
-                const spaceIds = units.map((u) => u.space_id);
-                setPlayerUnitSpaces(spaceIds);
-                if (units.length > 0) {
-                  setUnitDirection(units[0].direction ?? 0);
-                }
-              });
+            // Use the centralized refresh function
+            refreshState();
           })
           .catch((err) => console.error("Move error:", err));
       }

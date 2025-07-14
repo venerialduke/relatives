@@ -31,6 +31,10 @@ class GameState:
         self.structures: Dict[str, 'Structure'] = {}
         self.resources: Dict[str, 'Resource'] = {}
         
+        # Autonomous unit management
+        self.autonomous_units: Dict[str, 'AutonomousUnit'] = {}
+        self.collection_structures: List[str] = []  # IDs of structures that can collect
+        
         # Special accessibility tracking
         self.system_wide_accessible_spaces: List[str] = []  # Always accessible spaces
 
@@ -125,6 +129,8 @@ class GameState:
             "players": {pid: player.to_dict() for pid, player in self.players.items()},
             "structures": {sid: structure.to_dict() for sid, structure in self.structures.items()},
             "resources": {rid: resource.to_dict() for rid, resource in self.resources.items()},
+            "autonomous_units": {uid: unit.to_dict() for uid, unit in self.autonomous_units.items()},
+            "collection_structures": self.collection_structures,
             "system_wide_accessible_spaces": self.system_wide_accessible_spaces
         }
 
@@ -144,3 +150,85 @@ class GameState:
         """Get all structures in a specific space."""
         return [structure for structure in self.structures.values() 
                 if structure.location_space_id == space_id]
+    
+    # Autonomous unit lifecycle management
+    def add_autonomous_unit(self, unit: 'AutonomousUnit'):
+        """Add an autonomous unit to the game state."""
+        self.autonomous_units[unit.id] = unit
+        # Also add to regular units for compatibility
+        self.units[unit.id] = unit
+    
+    def remove_autonomous_unit(self, unit_id: str):
+        """Remove an autonomous unit from the game state."""
+        if unit_id in self.autonomous_units:
+            del self.autonomous_units[unit_id]
+        if unit_id in self.units:
+            del self.units[unit_id]
+    
+    def get_autonomous_unit_by_id(self, unit_id: str) -> Optional['AutonomousUnit']:
+        """Get autonomous unit by ID."""
+        return self.autonomous_units.get(unit_id)
+    
+    def get_all_autonomous_units(self) -> List['AutonomousUnit']:
+        """Get all autonomous units."""
+        return list(self.autonomous_units.values())
+    
+    def get_autonomous_units_by_type(self, unit_type: str) -> List['AutonomousUnit']:
+        """Get autonomous units of a specific type."""
+        return [unit for unit in self.autonomous_units.values() 
+                if getattr(unit, 'unit_type', type(unit).__name__).lower() == unit_type.lower()]
+    
+    def get_autonomous_units_by_state(self, state: str) -> List['AutonomousUnit']:
+        """Get autonomous units in a specific state."""
+        return [unit for unit in self.autonomous_units.values() if unit.state == state]
+    
+    def get_autonomous_units_near_expiration(self, threshold: int = 5) -> List['AutonomousUnit']:
+        """Get autonomous units near expiration (lifespan <= threshold)."""
+        return [unit for unit in self.autonomous_units.values() if unit.lifespan <= threshold]
+    
+    # Collection structure registry
+    def register_collection_structure(self, structure_id: str):
+        """Register a structure as a collection point."""
+        if structure_id not in self.collection_structures:
+            self.collection_structures.append(structure_id)
+    
+    def unregister_collection_structure(self, structure_id: str):
+        """Unregister a structure as a collection point."""
+        if structure_id in self.collection_structures:
+            self.collection_structures.remove(structure_id)
+    
+    def get_collection_structures(self) -> List['Structure']:
+        """Get all collection structures."""
+        return [self.structures[sid] for sid in self.collection_structures 
+                if sid in self.structures]
+    
+    def get_collection_structures_in_space(self, space_id: str) -> List['Structure']:
+        """Get collection structures in a specific space."""
+        space_structures = self.get_structures_by_space(space_id)
+        return [structure for structure in space_structures 
+                if structure.id in self.collection_structures]
+    
+    def find_nearest_collection_structure(self, from_space_id: str, max_distance: int = 20) -> Optional[Tuple['Structure', int]]:
+        """Find the nearest collection structure to a space."""
+        from utils.location_management import space_distance
+        
+        origin_space = self.get_space_by_id(from_space_id)
+        if not origin_space:
+            return None
+        
+        origin_body = self.get_body_by_id(origin_space.body_id)
+        if not origin_body:
+            return None
+        
+        nearest_structure = None
+        min_distance = float('inf')
+        
+        for structure in self.get_collection_structures():
+            structure_space = self.get_space_by_id(structure.location_space_id)
+            if structure_space and structure_space.body_id == origin_body.id:
+                distance = space_distance(origin_space, structure_space)
+                if distance <= max_distance and distance < min_distance:
+                    min_distance = distance
+                    nearest_structure = structure
+        
+        return (nearest_structure, int(min_distance)) if nearest_structure else None
